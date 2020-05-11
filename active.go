@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/releases"
 	"github.com/google/go-github/v31/github"
 )
@@ -34,7 +35,8 @@ func main() {
 	for _, file := range files {
 		fmt.Println(file)
 		yaml, _ := ioutil.ReadFile(file)
-		fmt.Printf("%s\n", yaml)
+		actions := parsing.Actions(string(yaml))
+		fmt.Println(actions)
 	}
 	// releases.Recent("fosskers", "aura")
 	fmt.Println("Done.")
