@@ -4,15 +4,20 @@ Keep your Github Action versions up-to-date.
 
 ### TODO
 
+First step: perform this on a local repo!
+
 - [ ] CLI flags
-  - [ ] Echo some arg
-  - [ ] Specify a project to check
+  - [x] Echo some arg
+  - [x] Specify a project to check
 - [ ] Read a file of projects to check
 - [ ] Github interaction
-  - [ ] Release ver lookup
-  - [ ] Pull down the `.github/workflows/foo.yaml` file
+  - [x] Release ver lookup
   - [ ] Apply the change automatically?
   - [ ] Push up a branch?
-  - [ ] Open a PR from that branch?
+  - [ ] Open a PR from that branch? (seems possible with the `github` lib!)
 - [ ] Parse a `.yaml` and look for usage of Actions
 - [ ] Produce a diff of the change
+- [ ] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
+- [ ] Set up CI
+- [ ] Full README
+- [ ] Official release
