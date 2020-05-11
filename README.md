@@ -15,9 +15,10 @@ First step: perform this on a local repo!
   - [ ] Apply the change automatically?
   - [ ] Push up a branch?
   - [ ] Open a PR from that branch? (seems possible with the `github` lib!)
+- [x] Basic file IO
 - [ ] Parse a `.yaml` and look for usage of Actions
 - [ ] Produce a diff of the change
 - [ ] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
-- [ ] Set up CI
+- [x] Set up CI
 - [ ] Full README
 - [ ] Official release
