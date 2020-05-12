@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/fosskers/active/parsing"
@@ -16,12 +17,12 @@ import (
 var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
 
 type Witness struct {
-	seen map[parsing.Action]bool
+	seen map[string]bool
 	mut  sync.Mutex
 }
 
 type Lookups struct {
-	vers map[parsing.Action]string
+	vers map[string]string
 	mut  sync.Mutex
 }
 
@@ -39,8 +40,8 @@ func main() {
 
 	// Concurrency settings
 	var wg sync.WaitGroup
-	witness := Witness{seen: make(map[parsing.Action]bool)}
-	lookups := Lookups{vers: make(map[parsing.Action]string)}
+	witness := Witness{seen: make(map[string]bool)}
+	lookups := Lookups{vers: make(map[string]string)}
 
 	// Detect updates.
 	for _, path := range paths {
@@ -74,12 +75,11 @@ func workflows(project string) ([]string, error) {
 }
 
 // Read a workflow file, detect its actions, and update them if necessary.
-func update(client *github.Client, witness *Witness, lookups *Lookups, path string) {
+func update(c *github.Client, w *Witness, l *Lookups, path string) (string, string, error) {
 	// Read the workflow file.
 	yamlRaw, err := ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Printf("Couldn't read %s. Skipping...\n", path)
-		return
+		return "", "", err
 	}
 
 	// Parse the workflow file.
@@ -91,36 +91,51 @@ func update(client *github.Client, witness *Witness, lookups *Lookups, path stri
 	for _, action := range actions {
 		wg.Add(1)
 		go func(action parsing.Action) {
-			versionLookup(client, witness, lookups, action)
+			versionLookup(c, w, l, action)
 			wg.Done()
 		}(action)
 	}
 	wg.Wait()
+
+	// Look for version discrepancies.
+	l.mut.Lock()
+	ls := l.vers // Grab a quick read-only copy.
+	l.mut.Unlock()
+	yamlNew := yaml
+	dones := make(map[string]bool) // Don't do the find-and-replace more than once.
+	for _, action := range actions {
+		repo := action.Repo()
+		if v, done := ls[repo], dones[repo]; !done && v != "" && action.Version != v {
+			// fmt.Printf("%s: %s to %s\n", repo, action.Version, v)
+			old := "uses: " + action.Raw()
+			new := "uses: " + repo + "@v" + v
+			yamlNew = strings.ReplaceAll(yamlNew, old, new)
+			dones[repo] = true
+		}
+	}
+
+	return yaml, yamlNew, nil
 }
 
 // Concurrently query the Github API for Action versions.
-func versionLookup(client *github.Client, witness *Witness, lookups *Lookups, action parsing.Action) {
+func versionLookup(c *github.Client, w *Witness, l *Lookups, a parsing.Action) {
 	// Have we looked up this Action already?
-	witness.mut.Lock()
-	if seen := witness.seen[action]; seen {
-		witness.mut.Unlock()
+	w.mut.Lock()
+	repo := a.Repo()
+	if seen := w.seen[repo]; seen {
+		w.mut.Unlock()
 		return
 	}
-	witness.seen[action] = true
-	witness.mut.Unlock()
+	w.seen[repo] = true
+	w.mut.Unlock()
 
 	// Version lookup and recording.
-	version, err := releases.Recent(client, action.Owner, action.Name)
+	version, err := releases.Recent(c, a.Owner, a.Name)
 	if err != nil {
-		fmt.Printf("No 'latest' release found for %s! Skipping...\n", action.Repo())
+		fmt.Printf("No 'latest' release found for %s! Skipping...\n", repo)
 		return
 	}
-	lookups.mut.Lock()
-	lookups.vers[action] = version
-	lookups.mut.Unlock()
-
-	// TODO Remove and do this elsewhere.
-	if action.Version != version {
-		fmt.Printf("%s: %s to %s\n", action.Repo(), action.Version, version)
-	}
+	l.mut.Lock()
+	l.vers[repo] = version
+	l.mut.Unlock()
 }
