@@ -8,6 +8,7 @@ import (
 
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/releases"
+	"github.com/fosskers/active/utils"
 	"github.com/google/go-github/v31/github"
 )
 
@@ -17,28 +18,20 @@ func main() {
 	// Collect command-line options.
 	flag.Parse()
 
-	// Github Communication
+	// Github communication.
+	// TODO Auth support.
 	client := github.NewClient(nil)
-	version, err := releases.Recent(client, "fosskers", "aura")
-	if err != nil {
-		fmt.Println(err)
-	} else {
-		fmt.Println(version) // This is it!
-	}
 
 	// Reading workflow files.
-	files, err := workflows(*project)
-	if err != nil {
-		fmt.Println(err)
-		return
+	paths, err := workflows(*project)
+	utils.Check(err)
+
+	// Detect updates.
+	for _, path := range paths {
+		fmt.Println(path)
+		update(client, path)
+		// TODO Print out a diff of the changes.
 	}
-	for _, file := range files {
-		fmt.Println(file)
-		yaml, _ := ioutil.ReadFile(file)
-		actions := parsing.Actions(string(yaml))
-		fmt.Println(actions)
-	}
-	// releases.Recent("fosskers", "aura")
 	fmt.Println("Done.")
 }
 
@@ -57,4 +50,20 @@ func workflows(project string) ([]string, error) {
 		}
 	}
 	return fullPaths, nil
+}
+
+// Read a workflow file, detect its actions, and update them if necessary.
+func update(client *github.Client, path string) {
+	yamlRaw, err := ioutil.ReadFile(path)
+	utils.Check(err)
+	yaml := string(yamlRaw)
+	actions := parsing.Actions(yaml)
+	for _, action := range actions {
+		version, err := releases.Recent(client, action.Owner, action.Name)
+		if err != nil {
+			fmt.Printf("No 'latest' release found for %s! Skipping...\n", action.Repo())
+		} else if action.Version != version {
+			fmt.Printf("%s: %s to %s\n", action.Repo(), action.Version, version)
+		}
+	}
 }

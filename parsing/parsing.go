@@ -1,7 +1,6 @@
 package parsing
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -11,14 +10,19 @@ type Action struct {
 	Version string
 }
 
+// The full `owner/repo@vN` format.
 func (a Action) Raw() string {
-	return a.Owner + "/" + a.Name + "@v" + a.Version
+	return a.Repo() + "@v" + a.Version
+}
+
+// The `owner/repo` format.
+func (a Action) Repo() string {
+	return a.Owner + "/" + a.Name
 }
 
 // Given the contents of a workflow YAML file, find all uses of a Github Action.
 func Actions(file string) []Action {
 	lines := strings.Split(file, "\n")
-	fmt.Println("Lines:", len(lines))
 	actions := make([]Action, 0, len(lines))
 	for _, line := range lines {
 		l := strings.TrimSpace(line)

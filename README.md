@@ -18,7 +18,9 @@ First step: perform this on a local repo!
 - [x] Basic file IO
 - [x] Parse a `.yaml` and look for usage of Actions
 - [ ] Produce a diff of the change
+- [ ] Flag for automatically applying the diff
 - [ ] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
+- [ ] Good use of concurrency
 - [x] Set up CI
 - [ ] Full README
 - [ ] Official release
