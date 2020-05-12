@@ -38,20 +38,24 @@ func main() {
 	paths, err := workflows(*project)
 	utils.Check(err)
 
-	// Concurrency settings
+	// Concurrency settings.
 	var wg sync.WaitGroup
 	witness := Witness{seen: make(map[string]bool)}
 	lookups := Lookups{vers: make(map[string]string)}
 
-	// Detect updates.
+	// Detect and apply updates.
 	for _, path := range paths {
 		fmt.Println(path)
 		wg.Add(1)
 		go func(path string) {
-			update(client, &witness, &lookups, path)
-			wg.Done()
+			defer wg.Done()
+			old, new, err := update(client, &witness, &lookups, path)
+			utils.Check(err)
+			if old != new {
+				fmt.Printf("Updating %s...\n", path)
+				ioutil.WriteFile(path, []byte(new), 0644)
+			}
 		}(path)
-		// TODO Print out a diff of the changes.
 	}
 	wg.Wait()
 	fmt.Println("Done.")
