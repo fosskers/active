@@ -54,6 +54,13 @@ type Env struct {
 	t *Terminal
 }
 
+// A richer representation of a filepath to a workflow file.
+type Path struct {
+	project string // The name of the repository.
+	name    string // The base name of the file.
+	full    string // The full filepath.
+}
+
 func main() {
 	// Collect command-line options.
 	flag.Parse()
@@ -67,7 +74,7 @@ func main() {
 	utils.ExitIfErr(err)
 	fmt.Println("Checking the following files:")
 	for _, path := range paths {
-		fmt.Printf("  --> %s\n", path)
+		fmt.Printf("  --> %s: %s\n", path.project, path.name)
 	}
 
 	// Runtime configuration. Mostly for coordinating concurrency.
@@ -83,27 +90,30 @@ func main() {
 
 // Given a local path to a code repository, find the paths of all its Github
 // workflow configuration files.
-func workflows(project string) ([]string, error) {
+func workflows(project string) ([]Path, error) {
 	workflowDir := filepath.Join(project, ".github/workflows")
 	items, err := ioutil.ReadDir(workflowDir)
 	if err != nil {
 		return nil, err
 	}
-	fullPaths := make([]string, 0, len(items))
+	fullPaths := make([]Path, 0, len(items))
 	for _, file := range items {
 		if !file.IsDir() {
-			fullPaths = append(fullPaths, filepath.Join(workflowDir, file.Name()))
+			proj := filepath.Base(project)
+			name := filepath.Base(file.Name())
+			full := filepath.Join(workflowDir, file.Name())
+			fullPaths = append(fullPaths, Path{proj, name, full})
 		}
 	}
 	return fullPaths, nil
 }
 
 // Detect and apply updates.
-func work(env *Env, paths []string) {
+func work(env *Env, paths []Path) {
 	var wg sync.WaitGroup
 	for _, path := range paths {
 		wg.Add(1)
-		go func(path string) {
+		go func(path Path) {
 			defer wg.Done()
 			yaml := readWorkflow(path)
 			actions := parsing.Actions(yaml)
@@ -124,7 +134,7 @@ func work(env *Env, paths []string) {
 				}
 				env.t.mut.Lock()
 				defer env.t.mut.Unlock()
-				fmt.Printf("Updates available for %s:\n", path)
+				fmt.Printf("Updates available for %s: %s:\n", path.project, path.name)
 				for action, v := range newAs {
 					repo := action.Repo()
 					nameDiff := longestName - len(repo)
@@ -137,8 +147,8 @@ func work(env *Env, paths []string) {
 				env.t.scan.Scan()
 				resp := env.t.scan.Text()
 				if resp == "Y" || resp == "y" || resp == "" {
-					fmt.Printf("Updating %s...\n", path)
-					ioutil.WriteFile(path, []byte(yamlNew), 0644)
+					ioutil.WriteFile(path.full, []byte(yamlNew), 0644)
+					fmt.Println("Updated.")
 				} else {
 					fmt.Println("Skipping...")
 				}
@@ -150,8 +160,8 @@ func work(env *Env, paths []string) {
 
 // Read the workflow file, if we can. Exit otherwise, since the user
 // probably wasn't expecting that their file was unreadable.
-func readWorkflow(path string) string {
-	yamlRaw, err := ioutil.ReadFile(path)
+func readWorkflow(path Path) string {
+	yamlRaw, err := ioutil.ReadFile(path.full)
 	utils.ExitIfErr(err)
 	return string(yamlRaw)
 }
