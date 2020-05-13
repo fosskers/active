@@ -105,21 +105,21 @@ func work(env *Env, paths []string) {
 		wg.Add(1)
 		go func(path string) {
 			defer wg.Done()
-			old, new, err := update(env, path)
-			env.t.mut.Lock()
-			defer env.t.mut.Unlock()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			if old != new {
+			yaml := readWorkflow(path)
+			actions := parsing.Actions(yaml)
+			register(env, actions)
+			yamlNew := update(env, actions, yaml)
+
+			if yaml != yamlNew {
+				env.t.mut.Lock()
+				defer env.t.mut.Unlock()
 				fmt.Printf("Updates available for %s:\n\n", path)
 				fmt.Printf("Would you like to apply them? [Y/n] ")
 				env.t.scan.Scan()
 				resp := env.t.scan.Text()
 				if resp == "Y" || resp == "y" || resp == "" {
 					fmt.Printf("Updating %s...\n", path)
-					ioutil.WriteFile(path, []byte(new), 0644)
+					ioutil.WriteFile(path, []byte(yamlNew), 0644)
 				} else {
 					fmt.Println("Skipping...")
 				}
@@ -129,19 +129,16 @@ func work(env *Env, paths []string) {
 	wg.Wait()
 }
 
-// Read a workflow file, detect its actions, and update them if necessary.
-func update(env *Env, path string) (string, string, error) {
-	// Read the workflow file.
+// Read the workflow file, if we can. Exit otherwise, since the user
+// probably wasn't expecting that their file was unreadable.
+func readWorkflow(path string) string {
 	yamlRaw, err := ioutil.ReadFile(path)
-	if err != nil {
-		return "", "", err
-	}
+	utils.ExitIfErr(err)
+	return string(yamlRaw)
+}
 
-	// Parse the workflow file.
-	yaml := string(yamlRaw)
-	actions := parsing.Actions(yaml)
-
-	// Concurrently query the Github API for Action versions.
+// Given some Actions, call the Github API and check for their latest versions.
+func register(env *Env, actions []parsing.Action) {
 	var wg sync.WaitGroup
 	for _, action := range actions {
 		wg.Add(1)
@@ -151,25 +148,6 @@ func update(env *Env, path string) (string, string, error) {
 		}(action)
 	}
 	wg.Wait()
-
-	// Look for version discrepancies.
-	env.l.mut.Lock()
-	ls := env.l.vers // Grab a quick read-only copy.
-	env.l.mut.Unlock()
-	yamlNew := yaml
-	dones := make(map[string]bool) // Don't do the find-and-replace more than once.
-	for _, action := range actions {
-		repo := action.Repo()
-		if v, done := ls[repo], dones[repo]; !done && v != "" && action.Version != v {
-			// fmt.Printf("%s: %s to %s\n", repo, action.Version, v)
-			old := "uses: " + action.Raw()
-			new := "uses: " + repo + "@v" + v
-			yamlNew = strings.ReplaceAll(yamlNew, old, new)
-			dones[repo] = true
-		}
-	}
-
-	return yaml, yamlNew, nil
 }
 
 // Concurrently query the Github API for Action versions.
@@ -192,4 +170,24 @@ func versionLookup(env *Env, a parsing.Action) {
 	env.l.mut.Lock()
 	env.l.vers[repo] = version
 	env.l.mut.Unlock()
+}
+
+// Given the Actions detected in some workflow file, try to replace them with
+// the newest versions available from Github.
+func update(env *Env, actions []parsing.Action, yaml string) string {
+	env.l.mut.Lock()
+	ls := env.l.vers // Grab a quick read-only copy.
+	env.l.mut.Unlock()
+	yamlNew := yaml
+	dones := make(map[string]bool) // Don't do the find-and-replace more than once.
+	for _, action := range actions {
+		repo := action.Repo()
+		if v, done := ls[repo], dones[repo]; !done && v != "" && action.Version != v {
+			old := "uses: " + action.Raw()
+			new := "uses: " + repo + "@v" + v
+			yamlNew = strings.ReplaceAll(yamlNew, old, new)
+			dones[repo] = true
+		}
+	}
+	return yamlNew
 }
