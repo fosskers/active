@@ -44,6 +44,16 @@ type Terminal struct {
 	mut  sync.Mutex
 }
 
+// Our global runtime environment. Passing these as a group simplifies a number
+// of function calls. Not every function that receives `Env` will need every
+// value, but in practice this isn't a problem.
+type Env struct {
+	c *github.Client
+	w *Witness
+	l *Lookups
+	t *Terminal
+}
+
 func main() {
 	// Collect command-line options.
 	flag.Parse()
@@ -65,13 +75,16 @@ func main() {
 	witness := Witness{seen: make(map[string]bool)}
 	lookups := Lookups{vers: make(map[string]string)}
 	terminal := Terminal{scan: bufio.NewScanner(os.Stdin)}
+	env := Env{client, &witness, &lookups, &terminal}
+
+	// TODO Make a `work` function.
 
 	// Detect and apply updates.
 	for _, path := range paths {
 		wg.Add(1)
 		go func(path string) {
 			defer wg.Done()
-			old, new, err := update(client, &witness, &lookups, path)
+			old, new, err := update(&env, path)
 			terminal.mut.Lock()
 			defer terminal.mut.Unlock()
 			if err != nil {
@@ -114,7 +127,7 @@ func workflows(project string) ([]string, error) {
 }
 
 // Read a workflow file, detect its actions, and update them if necessary.
-func update(c *github.Client, w *Witness, l *Lookups, path string) (string, string, error) {
+func update(env *Env, path string) (string, string, error) {
 	// Read the workflow file.
 	yamlRaw, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -130,16 +143,16 @@ func update(c *github.Client, w *Witness, l *Lookups, path string) (string, stri
 	for _, action := range actions {
 		wg.Add(1)
 		go func(action parsing.Action) {
-			versionLookup(c, w, l, action)
+			versionLookup(env, action)
 			wg.Done()
 		}(action)
 	}
 	wg.Wait()
 
 	// Look for version discrepancies.
-	l.mut.Lock()
-	ls := l.vers // Grab a quick read-only copy.
-	l.mut.Unlock()
+	env.l.mut.Lock()
+	ls := env.l.vers // Grab a quick read-only copy.
+	env.l.mut.Unlock()
 	yamlNew := yaml
 	dones := make(map[string]bool) // Don't do the find-and-replace more than once.
 	for _, action := range actions {
@@ -157,24 +170,24 @@ func update(c *github.Client, w *Witness, l *Lookups, path string) (string, stri
 }
 
 // Concurrently query the Github API for Action versions.
-func versionLookup(c *github.Client, w *Witness, l *Lookups, a parsing.Action) {
+func versionLookup(env *Env, a parsing.Action) {
 	// Have we looked up this Action already?
-	w.mut.Lock()
+	env.w.mut.Lock()
 	repo := a.Repo()
-	if seen := w.seen[repo]; seen {
-		w.mut.Unlock()
+	if seen := env.w.seen[repo]; seen {
+		env.w.mut.Unlock()
 		return
 	}
-	w.seen[repo] = true
-	w.mut.Unlock()
+	env.w.seen[repo] = true
+	env.w.mut.Unlock()
 
 	// Version lookup and recording.
-	version, err := releases.Recent(c, a.Owner, a.Name)
+	version, err := releases.Recent(env.c, a.Owner, a.Name)
 	if err != nil {
 		// fmt.Printf("Warning: No 'latest' release found for %s! Skipping...\n", repo)
 		return
 	}
-	l.mut.Lock()
-	l.vers[repo] = version
-	l.mut.Unlock()
+	env.l.mut.Lock()
+	env.l.vers[repo] = version
+	env.l.mut.Unlock()
 }
