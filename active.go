@@ -70,42 +70,14 @@ func main() {
 		fmt.Printf("  --> %s\n", path)
 	}
 
-	// Concurrency settings.
-	var wg sync.WaitGroup
+	// Runtime configuration. Mostly for coordinating concurrency.
 	witness := Witness{seen: make(map[string]bool)}
 	lookups := Lookups{vers: make(map[string]string)}
 	terminal := Terminal{scan: bufio.NewScanner(os.Stdin)}
 	env := Env{client, &witness, &lookups, &terminal}
 
-	// TODO Make a `work` function.
-
-	// Detect and apply updates.
-	for _, path := range paths {
-		wg.Add(1)
-		go func(path string) {
-			defer wg.Done()
-			old, new, err := update(&env, path)
-			terminal.mut.Lock()
-			defer terminal.mut.Unlock()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			if old != new {
-				fmt.Printf("Updates available for %s:\n\n", path)
-				fmt.Printf("Would you like to apply them? [Y/n] ")
-				terminal.scan.Scan()
-				resp := terminal.scan.Text()
-				if resp == "Y" || resp == "y" || resp == "" {
-					fmt.Printf("Updating %s...\n", path)
-					ioutil.WriteFile(path, []byte(new), 0644)
-				} else {
-					fmt.Println("Skipping...")
-				}
-			}
-		}(path)
-	}
-	wg.Wait()
+	// Perform updates and exit.
+	work(&env, paths)
 	fmt.Println("Done.")
 }
 
@@ -124,6 +96,37 @@ func workflows(project string) ([]string, error) {
 		}
 	}
 	return fullPaths, nil
+}
+
+// Detect and apply updates.
+func work(env *Env, paths []string) {
+	var wg sync.WaitGroup
+	for _, path := range paths {
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			old, new, err := update(env, path)
+			env.t.mut.Lock()
+			defer env.t.mut.Unlock()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			if old != new {
+				fmt.Printf("Updates available for %s:\n\n", path)
+				fmt.Printf("Would you like to apply them? [Y/n] ")
+				env.t.scan.Scan()
+				resp := env.t.scan.Text()
+				if resp == "Y" || resp == "y" || resp == "" {
+					fmt.Printf("Updating %s...\n", path)
+					ioutil.WriteFile(path, []byte(new), 0644)
+				} else {
+					fmt.Println("Skipping...")
+				}
+			}
+		}(path)
+	}
+	wg.Wait()
 }
 
 // Read a workflow file, detect its actions, and update them if necessary.
@@ -184,7 +187,6 @@ func versionLookup(env *Env, a parsing.Action) {
 	// Version lookup and recording.
 	version, err := releases.Recent(env.c, a.Owner, a.Name)
 	if err != nil {
-		// fmt.Printf("Warning: No 'latest' release found for %s! Skipping...\n", repo)
 		return
 	}
 	env.l.mut.Lock()
