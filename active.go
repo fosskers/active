@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -14,9 +15,11 @@ import (
 	"github.com/fosskers/active/releases"
 	"github.com/fosskers/active/utils"
 	"github.com/google/go-github/v31/github"
+	"golang.org/x/oauth2"
 )
 
 var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
+var token *string = flag.String("token", "", "Github API OAuth Token.")
 
 // During the lookup of the latest version of an `Action`, we don't want to call
 // the Github API more than once per Action. The `seen` map keeps a record of
@@ -66,8 +69,15 @@ func main() {
 	flag.Parse()
 
 	// Github communication.
-	// TODO Auth support.
-	client := github.NewClient(nil)
+	var client *github.Client
+	if *token == "" {
+		client = github.NewClient(nil)
+	} else {
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: *token})
+		tc := oauth2.NewClient(ctx, ts)
+		client = github.NewClient(tc)
+	}
 
 	// Reading workflow files.
 	paths, err := workflows(*project)
