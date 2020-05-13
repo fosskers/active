@@ -108,7 +108,8 @@ func work(env *Env, paths []string) {
 			yaml := readWorkflow(path)
 			actions := parsing.Actions(yaml)
 			register(env, actions)
-			yamlNew := update(env, actions, yaml)
+			newAs := newActionVersions(env, actions)
+			yamlNew := update(newAs, yaml)
 
 			if yaml != yamlNew {
 				env.t.mut.Lock()
@@ -172,22 +173,28 @@ func versionLookup(env *Env, a parsing.Action) {
 	env.l.mut.Unlock()
 }
 
-// Given the Actions detected in some workflow file, try to replace them with
-// the newest versions available from Github.
-func update(env *Env, actions []parsing.Action, yaml string) string {
+// For some Actions, what new version should they be assigned to?
+func newActionVersions(env *Env, actions []parsing.Action) map[parsing.Action]string {
 	env.l.mut.Lock()
 	ls := env.l.vers // Grab a quick read-only copy.
 	env.l.mut.Unlock()
-	yamlNew := yaml
-	dones := make(map[string]bool) // Don't do the find-and-replace more than once.
+	news := make(map[parsing.Action]string)
 	for _, action := range actions {
-		repo := action.Repo()
-		if v, done := ls[repo], dones[repo]; !done && v != "" && action.Version != v {
-			old := "uses: " + action.Raw()
-			new := "uses: " + repo + "@v" + v
-			yamlNew = strings.ReplaceAll(yamlNew, old, new)
-			dones[repo] = true
+		if v := ls[action.Repo()]; v != "" && action.Version != v {
+			news[action] = v
 		}
+	}
+	return news
+}
+
+// Given the Actions detected in some workflow file, try to replace them with
+// the newest versions available from Github.
+func update(actions map[parsing.Action]string, yaml string) string {
+	yamlNew := yaml
+	for action, v := range actions {
+		old := "uses: " + action.Raw()
+		new := "uses: " + action.Repo() + "@v" + v
+		yamlNew = strings.ReplaceAll(yamlNew, old, new)
 	}
 	return yamlNew
 }
