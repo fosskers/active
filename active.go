@@ -112,11 +112,26 @@ func work(env *Env, paths []string) {
 			yamlNew := update(newAs, yaml)
 
 			if yaml != yamlNew {
+				longestName := 0
+				longestVer := 0
+				for action := range newAs {
+					if repo := action.Repo(); len(repo) > longestName {
+						longestName = len(repo)
+					}
+					if len(action.Version) > longestVer {
+						longestVer = len(action.Version)
+					}
+				}
 				env.t.mut.Lock()
 				defer env.t.mut.Unlock()
 				fmt.Printf("Updates available for %s:\n", path)
 				for action, v := range newAs {
-					fmt.Printf("  %s %s --> %s\n", action.Repo(), action.Version, v)
+					repo := action.Repo()
+					nameDiff := longestName - len(repo)
+					verDiff := longestVer - len(action.Version)
+					spaces := strings.Repeat(" ", nameDiff+verDiff+1)
+					patt := "  %s" + spaces + "%s --> %s\n"
+					fmt.Printf(patt, repo, action.Version, v)
 				}
 				fmt.Printf("Would you like to apply them? [Y/n] ")
 				env.t.scan.Scan()
@@ -178,6 +193,8 @@ func versionLookup(env *Env, a parsing.Action) {
 
 // For some Actions, what new version should they be assigned to?
 func newActionVersions(env *Env, actions []parsing.Action) map[parsing.Action]string {
+	// TODO Is there a race condition here?
+	// Occasionally it seems to not detect all the versions that have changes available.
 	env.l.mut.Lock()
 	ls := env.l.vers // Grab a quick read-only copy.
 	env.l.mut.Unlock()
