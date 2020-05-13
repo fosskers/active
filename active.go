@@ -18,25 +18,30 @@ import (
 
 var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
 
+// During the lookup of the latest version of an `Action`, we don't want to call
+// the Github API more than once per Action. The `seen` map keeps a record of
+// lookup attempts.
 type Witness struct {
 	seen map[string]bool
 	mut  sync.Mutex
 }
 
+// For Actions that actually had a valid 'latest' release, we store the version
+// thereof. This is separate from `Witness`, since all _attempted_ lookups might
+// not have had an actual result. Keeping them separate also allows for slightly
+// less locking.
 type Lookups struct {
 	vers map[string]string
 	mut  sync.Mutex
 }
 
+// If changes were detected for a given workflow file, we want to prompt the
+// user for confirmation before applying them. The update detection process is
+// concurrent however, and there would be trouble if multiple prompts appeared
+// at the same time.
 type Terminal struct {
 	scan *bufio.Scanner
 	mut  sync.Mutex
-}
-
-// Create a lockable `Terminal` for user input.
-func newTerminal() Terminal {
-	reader := bufio.NewScanner(os.Stdin)
-	return Terminal{scan: reader}
 }
 
 func main() {
@@ -49,7 +54,7 @@ func main() {
 
 	// Reading workflow files.
 	paths, err := workflows(*project)
-	utils.Check(err)
+	utils.ExitIfErr(err)
 	fmt.Println("Checking the following files:")
 	for _, path := range paths {
 		fmt.Printf("  --> %s\n", path)
@@ -59,7 +64,7 @@ func main() {
 	var wg sync.WaitGroup
 	witness := Witness{seen: make(map[string]bool)}
 	lookups := Lookups{vers: make(map[string]string)}
-	terminal := newTerminal()
+	terminal := Terminal{scan: bufio.NewScanner(os.Stdin)}
 
 	// Detect and apply updates.
 	for _, path := range paths {

@@ -1,8 +1,15 @@
 package utils
 
-// Blow up if our `error` value was `nil`.
-func Check(err error) {
+import (
+	"fmt"
+	"os"
+)
+
+// Exit the program with an appropriate status code if our `error` value was
+// `nil`.
+func ExitIfErr(err error) {
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }
