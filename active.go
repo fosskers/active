@@ -114,7 +114,10 @@ func work(env *Env, paths []string) {
 			if yaml != yamlNew {
 				env.t.mut.Lock()
 				defer env.t.mut.Unlock()
-				fmt.Printf("Updates available for %s:\n\n", path)
+				fmt.Printf("Updates available for %s:\n", path)
+				for action, v := range newAs {
+					fmt.Printf("  %s %s --> %s\n", action.Repo(), action.Version, v)
+				}
 				fmt.Printf("Would you like to apply them? [Y/n] ")
 				env.t.scan.Scan()
 				resp := env.t.scan.Text()
