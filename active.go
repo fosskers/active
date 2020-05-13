@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -26,6 +28,17 @@ type Lookups struct {
 	mut  sync.Mutex
 }
 
+type Terminal struct {
+	scan *bufio.Scanner
+	mut  sync.Mutex
+}
+
+// Create a lockable `Terminal` for user input.
+func newTerminal() Terminal {
+	reader := bufio.NewScanner(os.Stdin)
+	return Terminal{scan: reader}
+}
+
 func main() {
 	// Collect command-line options.
 	flag.Parse()
@@ -37,23 +50,40 @@ func main() {
 	// Reading workflow files.
 	paths, err := workflows(*project)
 	utils.Check(err)
+	fmt.Println("Checking the following files:")
+	for _, path := range paths {
+		fmt.Printf("  --> %s\n", path)
+	}
 
 	// Concurrency settings.
 	var wg sync.WaitGroup
 	witness := Witness{seen: make(map[string]bool)}
 	lookups := Lookups{vers: make(map[string]string)}
+	terminal := newTerminal()
 
 	// Detect and apply updates.
 	for _, path := range paths {
-		fmt.Println(path)
 		wg.Add(1)
 		go func(path string) {
 			defer wg.Done()
 			old, new, err := update(client, &witness, &lookups, path)
-			utils.Check(err)
+			terminal.mut.Lock()
+			defer terminal.mut.Unlock()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 			if old != new {
-				fmt.Printf("Updating %s...\n", path)
-				ioutil.WriteFile(path, []byte(new), 0644)
+				fmt.Printf("Updates available for %s:\n\n", path)
+				fmt.Printf("Would you like to apply them? [Y/n] ")
+				terminal.scan.Scan()
+				resp := terminal.scan.Text()
+				if resp == "Y" || resp == "y" || resp == "" {
+					fmt.Printf("Updating %s...\n", path)
+					ioutil.WriteFile(path, []byte(new), 0644)
+				} else {
+					fmt.Println("Skipping...")
+				}
 			}
 		}(path)
 	}
@@ -136,7 +166,7 @@ func versionLookup(c *github.Client, w *Witness, l *Lookups, a parsing.Action) {
 	// Version lookup and recording.
 	version, err := releases.Recent(c, a.Owner, a.Name)
 	if err != nil {
-		fmt.Printf("No 'latest' release found for %s! Skipping...\n", repo)
+		// fmt.Printf("Warning: No 'latest' release found for %s! Skipping...\n", repo)
 		return
 	}
 	l.mut.Lock()
