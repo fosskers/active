@@ -20,7 +20,7 @@ import (
 
 var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
 var token *string = flag.String("token", "", "Github API OAuth Token.")
-var auto *bool = flag.Bool("apply", false, "Automatically apply changes.")
+var auto *bool = flag.Bool("y", false, "Automatically apply changes.")
 
 // During the lookup of the latest version of an `Action`, we don't want to call
 // the Github API more than once per Action. The `seen` map keeps a record of
