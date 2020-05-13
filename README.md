@@ -17,9 +17,9 @@ First step: perform this on a local repo!
   - [ ] Open a PR from that branch? (seems possible with the `github` lib!)
 - [x] Basic file IO
 - [x] Parse a `.yaml` and look for usage of Actions
-- [ ] Produce a diff of the change
-- [ ] Flag for automatically applying the diff
-- [ ] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
+- [x] Produce a diff of the change
+- [x] Flag for automatically applying the diff
+- [x] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
 - [x] Good use of concurrency
 - [x] Set up CI
 - [ ] Full README

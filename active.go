@@ -20,6 +20,7 @@ import (
 
 var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
 var token *string = flag.String("token", "", "Github API OAuth Token.")
+var auto *bool = flag.Bool("apply", false, "Automatically apply changes.")
 
 // During the lookup of the latest version of an `Action`, we don't want to call
 // the Github API more than once per Action. The `seen` map keeps a record of
@@ -153,10 +154,13 @@ func work(env *Env, paths []Path) {
 					patt := "  %s" + spaces + "%s --> %s\n"
 					fmt.Printf(patt, repo, action.Version, v)
 				}
-				fmt.Printf("Would you like to apply them? [Y/n] ")
-				env.t.scan.Scan()
-				resp := env.t.scan.Text()
-				if resp == "Y" || resp == "y" || resp == "" {
+				resp := "NO"
+				if !*auto {
+					fmt.Printf("Would you like to apply them? [Y/n] ")
+					env.t.scan.Scan()
+					resp = env.t.scan.Text()
+				}
+				if *auto || resp == "Y" || resp == "y" || resp == "" {
 					ioutil.WriteFile(path.full, []byte(yamlNew), 0644)
 					fmt.Println("Updated.")
 				} else {
