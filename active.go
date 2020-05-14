@@ -279,7 +279,7 @@ func prompt(env *Env, path Path, newAs map[parsing.Action]string) bool {
 			longestVer = len(action.Version)
 		}
 	}
-	fmt.Printf("Updates available for %s: %s:\n", path.project, path.name)
+	fmt.Printf("\nUpdates available for %s: %s:\n", path.project, path.name)
 	for action, v := range newAs {
 		repo := action.Repo()
 		nameDiff := longestName - len(repo)
