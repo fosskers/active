@@ -27,12 +27,14 @@ First step: perform this on a local repo!
 - [x] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
 - [x] Good use of concurrency
 - [x] Set up CI
-- [ ] `-j` flag for Japanese output
+- [ ] Localisation
+  - [ ] `-j` flag
+  - [ ] Config field for Japanese output
+  - [ ] README 和訳
 - [ ] README
   - [x] CI badge
   - [ ] Usage examples and sample output
   - [ ] Setting up OAuth
   - [ ] Table of Contents
-  - [ ] 和訳
 - [ ] Changelog
 - [ ] Official release

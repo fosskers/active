@@ -17,9 +17,11 @@ import (
 	"github.com/google/go-github/v31/github"
 )
 
-var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
-var token *string = flag.String("token", "", "(optional) Github API OAuth Token.")
-var auto *bool = flag.Bool("y", false, "Automatically apply changes.")
+// Command-line flags.
+var project *string = flag.String("project", ".", "Path to a local clone of a repository")
+var token *string = flag.String("token", "", "(optional) Github API OAuth Token")
+var auto *bool = flag.Bool("y", false, "Automatically apply changes")
+var batch *bool = flag.Bool("batch", false, "Check projects specified in active.conf")
 
 // During the lookup of the latest version of an `Action`, we don't want to call
 // the Github API more than once per Action. The `seen` map keeps a record of
@@ -78,42 +80,41 @@ type Workflows struct {
 }
 
 func main() {
-	// Collect command-line options.
-	flag.Parse()
+	flag.Parse()                            // Collect command-line options.
+	c := config.ReadConfig()                // Read the config file.
+	client := config.GithubClient(c, token) // Github communication.
+	env := getEnv(client)                   // Runtime environment.
+	paths := getPaths(c)                    // Reading workflow files.
 
-	// Read the config file.
-	c, e0 := config.ReadConfig()
-	utils.ExitIfErr(e0)
-
-	// Github communication.
-	client := config.GithubClient(c, token)
-
-	// Reading workflow files.
-	paths := make(map[Path]bool)
-	for _, proj := range c.Projects {
-		ps, e1 := workflows(proj)
-		utils.ExitIfErr(e1)
-		for _, p := range ps {
-			paths[p] = true
-		}
-	}
-	// paths, err := workflows(*project)
-	// utils.ExitIfErr(err)
 	fmt.Println("Checking the following files:")
 	// TODO Alignment of project names.
 	for path := range paths {
 		fmt.Printf("  --> %s: %s\n", path.project, path.name)
 	}
 
-	// Runtime configuration. Mostly for coordinating concurrency.
-	witness := Witness{seen: make(map[string]bool)}
-	lookups := Lookups{vers: make(map[string]string)}
-	terminal := Terminal{scan: bufio.NewScanner(os.Stdin)}
-	env := Env{client, &witness, &lookups, &terminal}
-
 	// Perform updates and exit.
-	work(&env, paths)
+	work(env, paths)
 	fmt.Println("Done.")
+}
+
+func getPaths(c *config.Config) map[Path]bool {
+	paths := make(map[Path]bool)
+	if *batch {
+		for _, proj := range c.Projects {
+			ps, e1 := workflows(proj)
+			utils.ExitIfErr(e1)
+			for _, p := range ps {
+				paths[p] = true
+			}
+		}
+	} else {
+		ps, err := workflows(*project)
+		utils.ExitIfErr(err)
+		for _, p := range ps {
+			paths[p] = true
+		}
+	}
+	return paths
 }
 
 // Given a local path to a code repository, find the paths of all its Github
@@ -134,6 +135,15 @@ func workflows(project string) ([]Path, error) {
 		}
 	}
 	return fullPaths, nil
+}
+
+// Construct a runtime environment.
+func getEnv(c *github.Client) *Env {
+	witness := Witness{seen: make(map[string]bool)}
+	lookups := Lookups{vers: make(map[string]string)}
+	terminal := Terminal{scan: bufio.NewScanner(os.Stdin)}
+	env := Env{c, &witness, &lookups, &terminal}
+	return &env
 }
 
 // Detect and apply updates.

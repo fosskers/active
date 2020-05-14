@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/ioutil"
 
+	"github.com/fosskers/active/utils"
 	"github.com/google/go-github/v31/github"
 	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v2"
@@ -16,17 +17,14 @@ type Config struct {
 
 // Doesn't mind if the expected fields are missing from the config file.
 // Default values are supplied if they are missing.
-func ReadConfig() (*Config, error) {
+// Exits the program if there were any errors.
+func ReadConfig() *Config {
 	c := Config{}
 	file, e0 := ioutil.ReadFile("/home/colin/code/go/active/active.yaml")
-	if e0 != nil {
-		return nil, e0
-	}
+	utils.ExitIfErr(e0)
 	e1 := yaml.Unmarshal(file, &c)
-	if e1 != nil {
-		return nil, e1
-	}
-	return &c, nil
+	utils.ExitIfErr(e1)
+	return &c
 }
 
 func GithubClient(config *Config, token *string) *github.Client {
