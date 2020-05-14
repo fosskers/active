@@ -140,13 +140,13 @@ func work(env *Env, paths []Path) {
 	// Parse all files and synchronize on the Actions.
 	for _, path := range paths {
 		wg.Add(1)
-		go func(path Path) {
+		go func(pth Path) {
 			defer wg.Done()
-			yaml := readWorkflow(path)
+			yaml := readWorkflow(pth)
 			actions := parsing.Actions(yaml)
 			register(env, actions)
 			ws.mux.Lock()
-			ws.ws = append(ws.ws, Workflow{path, yaml, actions})
+			ws.ws = append(ws.ws, Workflow{pth, yaml, actions})
 			ws.mux.Unlock()
 		}(path)
 	}
