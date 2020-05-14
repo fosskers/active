@@ -86,10 +86,19 @@ func main() {
 	env := getEnv(client)                   // Runtime environment.
 	paths := getPaths(c)                    // Reading workflow files.
 
+	// Report discovered files.
+	longest := 0
+	for path := range paths {
+		projlen := len(path.project)
+		if projlen > longest {
+			longest = projlen
+		}
+	}
 	fmt.Println("Checking the following files:")
 	// TODO Alignment of project names.
 	for path := range paths {
-		fmt.Printf("  --> %s: %s\n", path.project, path.name)
+		spaces := strings.Repeat(" ", longest-len(path.project))
+		fmt.Printf("  --> %s: %s%s\n", path.project, spaces, path.name)
 	}
 
 	// Perform updates and exit.
