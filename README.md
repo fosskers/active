@@ -1,5 +1,7 @@
 # active
 
+![img](https://github.com/fosskers/active/workflows/Tests/badge.svg)
+
 Keep your Github Action versions up-to-date.
 
 ### TODO
@@ -24,7 +26,7 @@ First step: perform this on a local repo!
 - [x] Set up CI
 - [ ] `-j` flag for Japanese output
 - [ ] README
-  - [ ] CI badge
+  - [x] CI badge
   - [ ] Usage examples and sample output
   - [ ] Setting up OAuth
   - [ ] Table of Contents
