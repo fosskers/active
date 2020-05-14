@@ -23,6 +23,11 @@ First step: perform this on a local repo!
 - [x] Good use of concurrency
 - [x] Set up CI
 - [ ] `-j` flag for Japanese output
-- [ ] Full README (w/ CI badge and 和訳)
+- [ ] README
+  - [ ] CI badge
+  - [ ] Usage examples and sample output
+  - [ ] Setting up OAuth
+  - [ ] Table of Contents
+  - [ ] 和訳
 - [ ] Changelog
 - [ ] Official release
