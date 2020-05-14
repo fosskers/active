@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -14,7 +13,6 @@ import (
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/releases"
 	"github.com/fosskers/active/utils"
-	"github.com/google/go-github/v31/github"
 )
 
 var home, _ = os.UserHomeDir()
@@ -25,42 +23,6 @@ var localF *bool = flag.Bool("local", false, "Check the local repo you're curren
 var tokenF *string = flag.String("token", "", "(optional) Github API OAuth Token.")
 var autoF *bool = flag.Bool("y", false, "Automatically apply changes.")
 var configPathF *string = flag.String("config", confPath, "Path to config file.")
-
-// During the lookup of the latest version of an `Action`, we don't want to call
-// the Github API more than once per Action. The `seen` map keeps a record of
-// lookup attempts.
-type Witness struct {
-	seen map[string]bool
-	mut  sync.Mutex
-}
-
-// For Actions that actually had a valid 'latest' release, we store the version
-// thereof. This is separate from `Witness`, since all _attempted_ lookups might
-// not have had an actual result. Keeping them separate also allows for slightly
-// less locking.
-type Lookups struct {
-	vers map[string]string
-	mut  sync.Mutex
-}
-
-// If changes were detected for a given workflow file, we want to prompt the
-// user for confirmation before applying them. The update detection process is
-// concurrent however, and there would be trouble if multiple prompts appeared
-// at the same time.
-type Terminal struct {
-	scan *bufio.Scanner
-	mut  sync.Mutex
-}
-
-// Our global runtime environment. Passing these as a group simplifies a number
-// of function calls. Not every function that receives `Env` will need every
-// value, but in practice this isn't a problem.
-type Env struct {
-	c *github.Client
-	w *Witness
-	l *Lookups
-	t *Terminal
-}
 
 // A richer representation of a filepath to a workflow file.
 type Path struct {
@@ -86,7 +48,7 @@ func main() {
 	flag.Parse()                             // Collect command-line options.
 	c := config.ReadConfig(*configPathF)     // Read the config file.
 	client := config.GithubClient(c, tokenF) // Github communication.
-	env := getEnv(client)                    // Runtime environment.
+	env := config.RuntimeEnv(client)         // Runtime environment.
 	paths := getPaths(c)                     // Reading workflow files.
 
 	if len(paths) == 0 {
@@ -113,6 +75,7 @@ func main() {
 	fmt.Println("Done.")
 }
 
+// The full paths to all workflow files across all projects to check.
 func getPaths(c *config.Config) map[Path]bool {
 	paths := make(map[Path]bool)
 	if !*localF {
@@ -153,17 +116,8 @@ func workflows(project string) ([]Path, error) {
 	return fullPaths, nil
 }
 
-// Construct a runtime environment.
-func getEnv(c *github.Client) *Env {
-	witness := Witness{seen: make(map[string]bool)}
-	lookups := Lookups{vers: make(map[string]string)}
-	terminal := Terminal{scan: bufio.NewScanner(os.Stdin)}
-	env := Env{c, &witness, &lookups, &terminal}
-	return &env
-}
-
 // Detect and apply updates.
-func work(env *Env, paths map[Path]bool) {
+func work(env *config.Env, paths map[Path]bool) {
 	var wg sync.WaitGroup
 	ws := Workflows{ws: make([]Workflow, 0)}
 
@@ -183,7 +137,7 @@ func work(env *Env, paths map[Path]bool) {
 	wg.Wait()
 
 	// Apply updates, if the user wants them.
-	ls := env.l.vers
+	ls := env.L.Vers
 	for _, workflow := range ws.ws {
 		wg.Add(1)
 		go func(wf Workflow) {
@@ -192,8 +146,8 @@ func work(env *Env, paths map[Path]bool) {
 			yamlNew := update(newAs, wf.yaml)
 
 			if wf.yaml != yamlNew {
-				env.t.mut.Lock()
-				defer env.t.mut.Unlock()
+				env.T.Mut.Lock()
+				defer env.T.Mut.Unlock()
 				resp := prompt(env, wf.path, newAs)
 				if resp {
 					ioutil.WriteFile(wf.path.full, []byte(yamlNew), 0644)
@@ -216,7 +170,7 @@ func readWorkflow(path Path) string {
 }
 
 // Given some Actions, call the Github API and check for their latest versions.
-func register(env *Env, actions []parsing.Action) {
+func register(env *config.Env, actions []parsing.Action) {
 	var wg sync.WaitGroup
 	for _, action := range actions {
 		wg.Add(1)
@@ -229,25 +183,25 @@ func register(env *Env, actions []parsing.Action) {
 }
 
 // Concurrently query the Github API for Action versions.
-func versionLookup(env *Env, a parsing.Action) {
+func versionLookup(env *config.Env, a parsing.Action) {
 	// Have we looked up this Action already?
-	env.w.mut.Lock()
+	env.W.Mut.Lock()
 	repo := a.Repo()
-	if seen := env.w.seen[repo]; seen {
-		env.w.mut.Unlock()
+	if seen := env.W.Seen[repo]; seen {
+		env.W.Mut.Unlock()
 		return
 	}
-	env.w.seen[repo] = true
-	env.w.mut.Unlock()
+	env.W.Seen[repo] = true
+	env.W.Mut.Unlock()
 
 	// Version lookup and recording.
-	version, err := releases.Recent(env.c, a.Owner, a.Name)
+	version, err := releases.Recent(env.C, a.Owner, a.Name)
 	if err != nil {
 		return
 	}
-	env.l.mut.Lock()
-	env.l.vers[repo] = version
-	env.l.mut.Unlock()
+	env.L.Mut.Lock()
+	env.L.Vers[repo] = version
+	env.L.Mut.Unlock()
 }
 
 // For some Actions, what new version should they be assigned to?
@@ -275,7 +229,7 @@ func update(actions map[parsing.Action]string, yaml string) string {
 
 // We detected some changes to a workflow file, so we inform the user and ask
 // whether we should write the changes to disk.
-func prompt(env *Env, path Path, newAs map[parsing.Action]string) bool {
+func prompt(env *config.Env, path Path, newAs map[parsing.Action]string) bool {
 	longestName := 0
 	longestVer := 0
 	for action := range newAs {
@@ -298,8 +252,8 @@ func prompt(env *Env, path Path, newAs map[parsing.Action]string) bool {
 	resp := "NO"
 	if !*autoF {
 		fmt.Printf("Would you like to apply them? [Y/n] ")
-		env.t.scan.Scan()
-		resp = env.t.scan.Text()
+		env.T.Scan.Scan()
+		resp = env.T.Scan.Text()
 	}
 	return *autoF || resp == "Y" || resp == "y" || resp == ""
 }
