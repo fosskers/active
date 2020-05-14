@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fosskers/active/config"
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/releases"
 	"github.com/fosskers/active/utils"
@@ -81,6 +82,11 @@ type Workflows struct {
 func main() {
 	// Collect command-line options.
 	flag.Parse()
+
+	// Read the config file.
+	c, e0 := config.ReadConfig()
+	utils.ExitIfErr(e0)
+	fmt.Println(*c)
 
 	// Github communication.
 	var client *github.Client

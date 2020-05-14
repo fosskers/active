@@ -11,7 +11,9 @@ First step: perform this on a local repo!
 - [x] CLI flags
   - [x] Echo some arg
   - [x] Specify a project to check
-- [ ] Read a file of projects to check
+- [ ] `.yaml` config file parsing
+  - [ ] List of projects to check
+  - [ ] Oauth token
 - [ ] Github interaction
   - [x] Release ver lookup
   - [ ] Apply the change automatically?
