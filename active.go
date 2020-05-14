@@ -89,10 +89,19 @@ func main() {
 	client := config.GithubClient(c, token)
 
 	// Reading workflow files.
-	paths, err := workflows(*project)
-	utils.ExitIfErr(err)
+	paths := make(map[Path]bool)
+	for _, proj := range c.Projects {
+		ps, e1 := workflows(proj)
+		utils.ExitIfErr(e1)
+		for _, p := range ps {
+			paths[p] = true
+		}
+	}
+	// paths, err := workflows(*project)
+	// utils.ExitIfErr(err)
 	fmt.Println("Checking the following files:")
-	for _, path := range paths {
+	// TODO Alignment of project names.
+	for path := range paths {
 		fmt.Printf("  --> %s: %s\n", path.project, path.name)
 	}
 
@@ -128,12 +137,12 @@ func workflows(project string) ([]Path, error) {
 }
 
 // Detect and apply updates.
-func work(env *Env, paths []Path) {
+func work(env *Env, paths map[Path]bool) {
 	var wg sync.WaitGroup
 	ws := Workflows{ws: make([]Workflow, 0)}
 
 	// Parse all files and synchronize on the Actions.
-	for _, path := range paths {
+	for path := range paths {
 		wg.Add(1)
 		go func(pth Path) {
 			defer wg.Done()
