@@ -19,7 +19,7 @@ import (
 )
 
 var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
-var token *string = flag.String("token", "", "Github API OAuth Token.")
+var token *string = flag.String("token", "", "(optional) Github API OAuth Token.")
 var auto *bool = flag.Bool("y", false, "Automatically apply changes.")
 
 // During the lookup of the latest version of an `Action`, we don't want to call
@@ -133,34 +133,8 @@ func work(env *Env, paths []Path) {
 			yamlNew := update(newAs, yaml)
 
 			if yaml != yamlNew {
-				longestName := 0
-				longestVer := 0
-				for action := range newAs {
-					if repo := action.Repo(); len(repo) > longestName {
-						longestName = len(repo)
-					}
-					if len(action.Version) > longestVer {
-						longestVer = len(action.Version)
-					}
-				}
-				env.t.mut.Lock()
-				defer env.t.mut.Unlock()
-				fmt.Printf("Updates available for %s: %s:\n", path.project, path.name)
-				for action, v := range newAs {
-					repo := action.Repo()
-					nameDiff := longestName - len(repo)
-					verDiff := longestVer - len(action.Version)
-					spaces := strings.Repeat(" ", nameDiff+verDiff+1)
-					patt := "  %s" + spaces + "%s --> %s\n"
-					fmt.Printf(patt, repo, action.Version, v)
-				}
-				resp := "NO"
-				if !*auto {
-					fmt.Printf("Would you like to apply them? [Y/n] ")
-					env.t.scan.Scan()
-					resp = env.t.scan.Text()
-				}
-				if *auto || resp == "Y" || resp == "y" || resp == "" {
+				resp := prompt(env, path, newAs)
+				if resp {
 					ioutil.WriteFile(path.full, []byte(yamlNew), 0644)
 					fmt.Println("Updated.")
 				} else {
@@ -222,6 +196,7 @@ func newActionVersions(env *Env, actions []parsing.Action) map[parsing.Action]st
 	env.l.mut.Lock()
 	ls := env.l.vers // Grab a quick read-only copy.
 	env.l.mut.Unlock()
+	fmt.Println("Actions: ", len(ls))
 	news := make(map[parsing.Action]string)
 	for _, action := range actions {
 		if v := ls[action.Repo()]; v != "" && action.Version != v {
@@ -241,4 +216,37 @@ func update(actions map[parsing.Action]string, yaml string) string {
 		yamlNew = strings.ReplaceAll(yamlNew, old, new)
 	}
 	return yamlNew
+}
+
+// We detected some changes to a workflow file, so we inform the user and ask
+// whether we should write the changes to disk.
+func prompt(env *Env, path Path, newAs map[parsing.Action]string) bool {
+	longestName := 0
+	longestVer := 0
+	for action := range newAs {
+		if repo := action.Repo(); len(repo) > longestName {
+			longestName = len(repo)
+		}
+		if len(action.Version) > longestVer {
+			longestVer = len(action.Version)
+		}
+	}
+	env.t.mut.Lock()
+	defer env.t.mut.Unlock()
+	fmt.Printf("Updates available for %s: %s:\n", path.project, path.name)
+	for action, v := range newAs {
+		repo := action.Repo()
+		nameDiff := longestName - len(repo)
+		verDiff := longestVer - len(action.Version)
+		spaces := strings.Repeat(" ", nameDiff+verDiff+1)
+		patt := "  %s" + spaces + "%s --> %s\n"
+		fmt.Printf(patt, repo, action.Version, v)
+	}
+	resp := "NO"
+	if !*auto {
+		fmt.Printf("Would you like to apply them? [Y/n] ")
+		env.t.scan.Scan()
+		resp = env.t.scan.Text()
+	}
+	return *auto || resp == "Y" || resp == "y" || resp == ""
 }

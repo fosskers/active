@@ -22,5 +22,6 @@ First step: perform this on a local repo!
 - [x] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
 - [x] Good use of concurrency
 - [x] Set up CI
-- [ ] Full README
+- [ ] `-j` flag for Japanese output
+- [ ] Full README (w/ CI badge and 和訳)
 - [ ] Official release
