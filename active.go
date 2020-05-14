@@ -17,11 +17,14 @@ import (
 	"github.com/google/go-github/v31/github"
 )
 
+var home, _ = os.UserHomeDir()
+var confPath string = filepath.Join(home, ".config/active.yaml")
+
 // Command-line flags.
-var project *string = flag.String("project", ".", "Path to a local clone of a repository")
-var token *string = flag.String("token", "", "(optional) Github API OAuth Token")
-var auto *bool = flag.Bool("y", false, "Automatically apply changes")
-var batch *bool = flag.Bool("batch", false, "Check projects specified in active.conf")
+var localF *bool = flag.Bool("local", false, "Check the local repo you're currently in.")
+var tokenF *string = flag.String("token", "", "(optional) Github API OAuth Token.")
+var autoF *bool = flag.Bool("y", false, "Automatically apply changes.")
+var configPathF *string = flag.String("config", confPath, "Path to config file.")
 
 // During the lookup of the latest version of an `Action`, we don't want to call
 // the Github API more than once per Action. The `seen` map keeps a record of
@@ -80,11 +83,16 @@ type Workflows struct {
 }
 
 func main() {
-	flag.Parse()                            // Collect command-line options.
-	c := config.ReadConfig()                // Read the config file.
-	client := config.GithubClient(c, token) // Github communication.
-	env := getEnv(client)                   // Runtime environment.
-	paths := getPaths(c)                    // Reading workflow files.
+	flag.Parse()                             // Collect command-line options.
+	c := config.ReadConfig(*configPathF)     // Read the config file.
+	client := config.GithubClient(c, tokenF) // Github communication.
+	env := getEnv(client)                    // Runtime environment.
+	paths := getPaths(c)                     // Reading workflow files.
+
+	if len(paths) == 0 {
+		fmt.Println("No files to check. Try '--local' or setting your config file.")
+		os.Exit(1)
+	}
 
 	// Report discovered files.
 	longest := 0
@@ -95,7 +103,6 @@ func main() {
 		}
 	}
 	fmt.Println("Checking the following files:")
-	// TODO Alignment of project names.
 	for path := range paths {
 		spaces := strings.Repeat(" ", longest-len(path.project))
 		fmt.Printf("  --> %s: %s%s\n", path.project, spaces, path.name)
@@ -108,7 +115,7 @@ func main() {
 
 func getPaths(c *config.Config) map[Path]bool {
 	paths := make(map[Path]bool)
-	if *batch {
+	if !*localF {
 		for _, proj := range c.Projects {
 			ps, e1 := workflows(proj)
 			utils.ExitIfErr(e1)
@@ -117,7 +124,7 @@ func getPaths(c *config.Config) map[Path]bool {
 			}
 		}
 	} else {
-		ps, err := workflows(*project)
+		ps, err := workflows(".")
 		utils.ExitIfErr(err)
 		for _, p := range ps {
 			paths[p] = true
@@ -181,7 +188,7 @@ func work(env *Env, paths map[Path]bool) {
 		wg.Add(1)
 		go func(wf Workflow) {
 			defer wg.Done()
-			newAs := newActionVersions(ls, wf.actions)
+			newAs := newActionVers(ls, wf.actions)
 			yamlNew := update(newAs, wf.yaml)
 
 			if wf.yaml != yamlNew {
@@ -244,7 +251,7 @@ func versionLookup(env *Env, a parsing.Action) {
 }
 
 // For some Actions, what new version should they be assigned to?
-func newActionVersions(ls map[string]string, actions []parsing.Action) map[parsing.Action]string {
+func newActionVers(ls map[string]string, actions []parsing.Action) map[parsing.Action]string {
 	news := make(map[parsing.Action]string)
 	for _, action := range actions {
 		if v := ls[action.Repo()]; v != "" && action.Version != v {
@@ -289,10 +296,10 @@ func prompt(env *Env, path Path, newAs map[parsing.Action]string) bool {
 		fmt.Printf(patt, repo, action.Version, v)
 	}
 	resp := "NO"
-	if !*auto {
+	if !*autoF {
 		fmt.Printf("Would you like to apply them? [Y/n] ")
 		env.t.scan.Scan()
 		resp = env.t.scan.Text()
 	}
-	return *auto || resp == "Y" || resp == "y" || resp == ""
+	return *autoF || resp == "Y" || resp == "y" || resp == ""
 }

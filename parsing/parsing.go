@@ -43,5 +43,3 @@ func parseAction(line string) Action {
 	name := strings.SplitN(owner[1], "@", 2)
 	return Action{Owner: owner[0], Name: name[0], Version: name[1][1:]}
 }
-
-// TODO Eventually I'll use ReplaceAll to do the actual replacements.

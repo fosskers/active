@@ -17,13 +17,14 @@ type Config struct {
 
 // Doesn't mind if the expected fields are missing from the config file.
 // Default values are supplied if they are missing.
-// Exits the program if there were any errors.
-func ReadConfig() *Config {
+// Exits the program if parsing the config file failed.
+func ReadConfig(path string) *Config {
 	c := Config{}
-	file, e0 := ioutil.ReadFile("/home/colin/code/go/active/active.yaml")
-	utils.ExitIfErr(e0)
-	e1 := yaml.Unmarshal(file, &c)
-	utils.ExitIfErr(e1)
+	file, e0 := ioutil.ReadFile(path)
+	if e0 == nil {
+		e1 := yaml.Unmarshal(file, &c)
+		utils.ExitIfErr(e1)
+	}
 	return &c
 }
 
