@@ -162,6 +162,8 @@ func work(env *Env, paths []Path) {
 			yamlNew := update(newAs, wf.yaml)
 
 			if wf.yaml != yamlNew {
+				env.t.mut.Lock()
+				defer env.t.mut.Unlock()
 				resp := prompt(env, wf.path, newAs)
 				if resp {
 					ioutil.WriteFile(wf.path.full, []byte(yamlNew), 0644)
@@ -254,8 +256,6 @@ func prompt(env *Env, path Path, newAs map[parsing.Action]string) bool {
 			longestVer = len(action.Version)
 		}
 	}
-	env.t.mut.Lock()
-	defer env.t.mut.Unlock()
 	fmt.Printf("Updates available for %s: %s:\n", path.project, path.name)
 	for action, v := range newAs {
 		repo := action.Repo()
