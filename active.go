@@ -65,6 +65,19 @@ type Path struct {
 	full    string // The full filepath.
 }
 
+// All data pertaining to a fully read and parsed Workflow file.
+type Workflow struct {
+	path    Path
+	yaml    string
+	actions []parsing.Action
+}
+
+// A grouping of `Workflow` files for concurrent reads/writes.
+type Workflows struct {
+	ws  []Workflow
+	mux sync.Mutex
+}
+
 func main() {
 	// Collect command-line options.
 	flag.Parse()
@@ -122,6 +135,9 @@ func workflows(project string) ([]Path, error) {
 // Detect and apply updates.
 func work(env *Env, paths []Path) {
 	var wg sync.WaitGroup
+	ws := Workflows{ws: make([]Workflow, 0)}
+
+	// Parse all files and synchronize on the Actions.
 	for _, path := range paths {
 		wg.Add(1)
 		go func(path Path) {
@@ -129,19 +145,32 @@ func work(env *Env, paths []Path) {
 			yaml := readWorkflow(path)
 			actions := parsing.Actions(yaml)
 			register(env, actions)
-			newAs := newActionVersions(env, actions)
-			yamlNew := update(newAs, yaml)
+			ws.mux.Lock()
+			ws.ws = append(ws.ws, Workflow{path, yaml, actions})
+			ws.mux.Unlock()
+		}(path)
+	}
+	wg.Wait()
 
-			if yaml != yamlNew {
-				resp := prompt(env, path, newAs)
+	// Apply updates, if the user wants them.
+	ls := env.l.vers
+	for _, workflow := range ws.ws {
+		wg.Add(1)
+		go func(wf Workflow) {
+			defer wg.Done()
+			newAs := newActionVersions(ls, wf.actions)
+			yamlNew := update(newAs, wf.yaml)
+
+			if wf.yaml != yamlNew {
+				resp := prompt(env, wf.path, newAs)
 				if resp {
-					ioutil.WriteFile(path.full, []byte(yamlNew), 0644)
+					ioutil.WriteFile(wf.path.full, []byte(yamlNew), 0644)
 					fmt.Println("Updated.")
 				} else {
 					fmt.Println("Skipping...")
 				}
 			}
-		}(path)
+		}(workflow)
 	}
 	wg.Wait()
 }
@@ -190,13 +219,7 @@ func versionLookup(env *Env, a parsing.Action) {
 }
 
 // For some Actions, what new version should they be assigned to?
-func newActionVersions(env *Env, actions []parsing.Action) map[parsing.Action]string {
-	// TODO Is there a race condition here?
-	// Occasionally it seems to not detect all the versions that have changes available.
-	env.l.mut.Lock()
-	ls := env.l.vers // Grab a quick read-only copy.
-	env.l.mut.Unlock()
-	fmt.Println("Actions: ", len(ls))
+func newActionVersions(ls map[string]string, actions []parsing.Action) map[parsing.Action]string {
 	news := make(map[parsing.Action]string)
 	for _, action := range actions {
 		if v := ls[action.Repo()]; v != "" && action.Version != v {

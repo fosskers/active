@@ -24,4 +24,5 @@ First step: perform this on a local repo!
 - [x] Set up CI
 - [ ] `-j` flag for Japanese output
 - [ ] Full README (w/ CI badge and 和訳)
+- [ ] Changelog
 - [ ] Official release
