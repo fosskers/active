@@ -12,8 +12,9 @@ First step: perform this on a local repo!
   - [x] Echo some arg
   - [x] Specify a project to check
 - [ ] `.yaml` config file parsing
-  - [ ] List of projects to check
-  - [ ] Oauth token
+  - [x] List of projects to check
+  - [x] Oauth token
+  - [ ] CLI flag for changing config location
 - [ ] Github interaction
   - [x] Release ver lookup
   - [ ] Apply the change automatically?

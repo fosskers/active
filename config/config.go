@@ -1,8 +1,11 @@
 package config
 
 import (
+	"context"
 	"io/ioutil"
 
+	"github.com/google/go-github/v31/github"
+	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v2"
 )
 
@@ -24,4 +27,19 @@ func ReadConfig() (*Config, error) {
 		return nil, e1
 	}
 	return &c, nil
+}
+
+func GithubClient(config *Config, token *string) *github.Client {
+	if *token == "" && config.Token == "" {
+		return github.NewClient(nil)
+	} else {
+		tok := *token
+		if tok == "" {
+			tok = config.Token
+		}
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: tok})
+		tc := oauth2.NewClient(ctx, ts)
+		return github.NewClient(tc)
+	}
 }

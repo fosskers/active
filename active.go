@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -16,7 +15,6 @@ import (
 	"github.com/fosskers/active/releases"
 	"github.com/fosskers/active/utils"
 	"github.com/google/go-github/v31/github"
-	"golang.org/x/oauth2"
 )
 
 var project *string = flag.String("project", ".", "Path to a local clone of a repository.")
@@ -86,18 +84,9 @@ func main() {
 	// Read the config file.
 	c, e0 := config.ReadConfig()
 	utils.ExitIfErr(e0)
-	fmt.Println(*c)
 
 	// Github communication.
-	var client *github.Client
-	if *token == "" {
-		client = github.NewClient(nil)
-	} else {
-		ctx := context.Background()
-		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: *token})
-		tc := oauth2.NewClient(ctx, ts)
-		client = github.NewClient(tc)
-	}
+	client := config.GithubClient(c, token)
 
 	// Reading workflow files.
 	paths, err := workflows(*project)
