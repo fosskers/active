@@ -8,11 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fosskers/active/config"
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/releases"
 	"github.com/fosskers/active/utils"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 var home, _ = os.UserHomeDir()
@@ -23,6 +26,11 @@ var localF *bool = flag.Bool("local", false, "Check the local repo you're curren
 var tokenF *string = flag.String("token", "", "(optional) Github API OAuth Token.")
 var autoF *bool = flag.Bool("y", false, "Automatically apply changes.")
 var configPathF *string = flag.String("config", confPath, "Path to config file.")
+
+type Project struct {
+	name  string
+	paths []Path
+}
 
 // A richer representation of a filepath to a workflow file.
 type Path struct {
@@ -72,6 +80,25 @@ func main() {
 
 	// Perform updates and exit.
 	work(env, paths)
+
+	// GIT STUFF
+	// TODO Change data representation. `Path`s from the same project
+	// need to be kept together, so that we only need to make one commit.
+	r, e0 := git.PlainOpen("/home/colin/code/haskell/versions")
+	utils.ExitIfErr(e0)
+	w, e1 := r.Worktree()
+	utils.ExitIfErr(e1)
+	_, e3 := w.Add(".github/workflows/ci.yaml")
+	utils.ExitIfErr(e3)
+	_, e2 := w.Commit("[active] Updating Github Actions", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Colin Woodbury",
+			Email: "colin@fosskers.ca",
+			When:  time.Now(),
+		},
+	})
+	utils.ExitIfErr(e2)
+
 	fmt.Println("Done.")
 }
 
