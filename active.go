@@ -16,6 +16,7 @@ import (
 	"github.com/fosskers/active/utils"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/google/go-github/v31/github"
 )
 
 var home, _ = os.UserHomeDir()
@@ -26,30 +27,20 @@ var localF *bool = flag.Bool("local", false, "Check the local repo you're curren
 var tokenF *string = flag.String("token", "", "(optional) Github API OAuth Token.")
 var autoF *bool = flag.Bool("y", false, "Automatically apply changes.")
 var configPathF *string = flag.String("config", confPath, "Path to config file.")
+var pushF *bool = flag.Bool("push", false, "Automatically make commits and open a PR on Github.")
 
 type Project struct {
-	name  string
-	paths []Path
-}
-
-// A richer representation of a filepath to a workflow file.
-type Path struct {
-	project string // The name of the repository.
-	name    string // The base name of the file.
-	full    string // The full filepath.
+	name      string
+	workflows []Workflow
+	repo      *git.Repository
+	success   bool // Icky mutable field.
 }
 
 // All data pertaining to a fully read and parsed Workflow file.
 type Workflow struct {
-	path    Path
+	path    string // Full filepath to the workflow file.
 	yaml    string
 	actions []parsing.Action
-}
-
-// A grouping of `Workflow` files for concurrent reads/writes.
-type Workflows struct {
-	ws  []Workflow
-	mux sync.Mutex
 }
 
 func main() {
@@ -102,42 +93,50 @@ func main() {
 	fmt.Println("Done.")
 }
 
-// The full paths to all workflow files across all projects to check.
-func getPaths(c *config.Config) map[Path]bool {
-	paths := make(map[Path]bool)
-	if !*localF {
-		for _, proj := range c.Projects {
-			ps, e1 := workflows(proj)
-			utils.ExitIfErr(e1)
-			for _, p := range ps {
-				paths[p] = true
-			}
-		}
-	} else {
-		ps, err := workflows(".")
-		utils.ExitIfErr(err)
-		for _, p := range ps {
-			paths[p] = true
-		}
+func allProjects(c *config.Config) []Project {
+	return nil
+}
+
+// Given a local path to a Git repository, read everything from the filesystem
+// that's necessary for further processing.
+func project(path string) *Project {
+	// If the user has asked for automatic commit pushing, attempt to the open
+	// local Git repo.
+	var repo *git.Repository
+	if *pushF {
+		r, e0 := git.PlainOpen(path)
+		utils.ExitIfErr(e0)
+		repo = r
 	}
-	return paths
+
+	// Read and parse all Workflow files.
+	wps, e1 := workflows(path)
+	utils.ExitIfErr(e1)
+	ws := make([]Workflow, 0)
+	for _, wp := range wps {
+		yaml := readWorkflow(wp)
+		actions := parsing.Actions(yaml)
+		workflow := Workflow{wp, yaml, actions}
+		ws = append(ws, workflow)
+	}
+
+	name := filepath.Base(path)
+	return &Project{name: name, workflows: ws, repo: repo, success: false}
 }
 
 // Given a local path to a code repository, find the paths of all its Github
 // workflow configuration files.
-func workflows(project string) ([]Path, error) {
+func workflows(project string) ([]string, error) {
 	workflowDir := filepath.Join(project, ".github/workflows")
 	items, err := ioutil.ReadDir(workflowDir)
 	if err != nil {
 		return nil, err
 	}
-	fullPaths := make([]Path, 0, len(items))
+	fullPaths := make([]string, 0, len(items))
 	for _, file := range items {
 		if !file.IsDir() {
-			proj := filepath.Base(project)
-			name := filepath.Base(file.Name())
 			full := filepath.Join(workflowDir, file.Name())
-			fullPaths = append(fullPaths, Path{proj, name, full})
+			fullPaths = append(fullPaths, full)
 		}
 	}
 	return fullPaths, nil
