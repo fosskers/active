@@ -1,6 +1,7 @@
 # active
 
 ![img](https://github.com/fosskers/active/workflows/Tests/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fosskers/active)](https://goreportcard.com/report/github.com/fosskers/active)
 
 *Keep your Github Action versions up-to-date. 使用の Github Actions を最新に！*
 
