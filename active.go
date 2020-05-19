@@ -8,15 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/fosskers/active/config"
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/releases"
 	"github.com/fosskers/active/utils"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/google/go-github/v31/github"
 )
 
 var home, _ = os.UserHomeDir()
@@ -31,7 +28,7 @@ var pushF *bool = flag.Bool("push", false, "Automatically make commits and open 
 
 type Project struct {
 	name      string
-	workflows []Workflow
+	workflows []*Workflow
 	repo      *git.Repository
 	success   bool // Icky mutable field.
 }
@@ -48,57 +45,99 @@ func main() {
 	c := config.ReadConfig(*configPathF)     // Read the config file.
 	client := config.GithubClient(c, tokenF) // Github communication.
 	env := config.RuntimeEnv(client)         // Runtime environment.
-	paths := getPaths(c)                     // Reading workflow files.
-
-	if len(paths) == 0 {
-		fmt.Println("No files to check. Try '--local' or setting your config file.")
-		os.Exit(1)
-	}
+	projects := allProjects(c)
 
 	// Report discovered files.
 	longest := 0
-	for path := range paths {
-		projlen := len(path.project)
+	for _, proj := range projects {
+		projlen := len(proj.name)
 		if projlen > longest {
 			longest = projlen
 		}
 	}
 	fmt.Println("Checking the following files:")
-	for path := range paths {
-		spaces := strings.Repeat(" ", longest-len(path.project))
-		fmt.Printf("  --> %s: %s%s\n", path.project, spaces, path.name)
+	for _, proj := range projects {
+		for _, w := range proj.workflows {
+			spaces := strings.Repeat(" ", longest-len(proj.name))
+			fmt.Printf("  --> %s: %s%s\n", proj.name, spaces, filepath.Base(w.path))
+		}
 	}
 
-	// Perform updates and exit.
-	work(env, paths)
+	// Register parsed Actions (calls the Github API).
+	var wg sync.WaitGroup
+	for _, proj := range projects {
+		for _, wf := range proj.workflows {
+			wg.Add(1)
+			go func(w *Workflow) {
+				register(env, w.actions)
+				wg.Done()
+			}(wf)
+		}
+	}
+	wg.Wait()
+
+	// Perform updates concurrently.
+	for _, proj := range projects {
+		wg.Add(1)
+		go func(p *Project) {
+			applyUpdates(env, p)
+			wg.Done()
+		}(proj)
+	}
+	wg.Wait()
+
+	if *pushF {
+		fmt.Println("Would have done all the Git stuff here!")
+		// TODO All git interaction.
+	}
 
 	// GIT STUFF
 	// TODO Change data representation. `Path`s from the same project
 	// need to be kept together, so that we only need to make one commit.
-	r, e0 := git.PlainOpen("/home/colin/code/haskell/versions")
-	utils.ExitIfErr(e0)
-	w, e1 := r.Worktree()
-	utils.ExitIfErr(e1)
-	_, e3 := w.Add(".github/workflows/ci.yaml")
-	utils.ExitIfErr(e3)
-	_, e2 := w.Commit("[active] Updating Github Actions", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Colin Woodbury",
-			Email: "colin@fosskers.ca",
-			When:  time.Now(),
-		},
-	})
-	utils.ExitIfErr(e2)
+	// r, e0 := git.PlainOpen("/home/colin/code/haskell/versions")
+	// utils.ExitIfErr(e0)
+	// w, e1 := r.Worktree()
+	// utils.ExitIfErr(e1)
+	// _, e3 := w.Add(".github/workflows/ci.yaml")
+	// utils.ExitIfErr(e3)
+	// _, e2 := w.Commit("[active] Updating Github Actions", &git.CommitOptions{
+	//	Author: &object.Signature{
+	//		Name:  "Colin Woodbury",
+	//		Email: "colin@fosskers.ca",
+	//		When:  time.Now(),
+	//	},
+	// })
+	// utils.ExitIfErr(e2)
 
 	fmt.Println("Done.")
 }
 
-func allProjects(c *config.Config) []Project {
-	return nil
+// TODO Also consider the `local` flag.
+//
+// Will exit the program if there are no projects to check, or if a specified
+// project has no workflow files.
+func allProjects(c *config.Config) []*Project {
+	if len(c.Projects) == 0 {
+		fmt.Println("No projects to check. Try '--local' or setting your config file.")
+		os.Exit(1)
+	}
+
+	ps := make([]*Project, 0)
+	for _, p := range c.Projects {
+		proj := project(p)
+		if len(proj.workflows) == 0 {
+			fmt.Printf("No workflow files detected for %s\n.", proj.name)
+			os.Exit(1)
+		}
+		ps = append(ps, proj)
+	}
+	return ps
 }
 
 // Given a local path to a Git repository, read everything from the filesystem
 // that's necessary for further processing.
+//
+// Exits the program if even one file fails to be read.
 func project(path string) *Project {
 	// If the user has asked for automatic commit pushing, attempt to the open
 	// local Git repo.
@@ -112,12 +151,12 @@ func project(path string) *Project {
 	// Read and parse all Workflow files.
 	wps, e1 := workflows(path)
 	utils.ExitIfErr(e1)
-	ws := make([]Workflow, 0)
+	ws := make([]*Workflow, 0)
 	for _, wp := range wps {
 		yaml := readWorkflow(wp)
 		actions := parsing.Actions(yaml)
 		workflow := Workflow{wp, yaml, actions}
-		ws = append(ws, workflow)
+		ws = append(ws, &workflow)
 	}
 
 	name := filepath.Base(path)
@@ -143,54 +182,33 @@ func workflows(project string) ([]string, error) {
 }
 
 // Detect and apply updates.
-func work(env *config.Env, paths map[Path]bool) {
-	var wg sync.WaitGroup
-	ws := Workflows{ws: make([]Workflow, 0)}
-
-	// Parse all files and synchronize on the Actions.
-	for path := range paths {
-		wg.Add(1)
-		go func(pth Path) {
-			defer wg.Done()
-			yaml := readWorkflow(pth)
-			actions := parsing.Actions(yaml)
-			register(env, actions)
-			ws.mux.Lock()
-			ws.ws = append(ws.ws, Workflow{pth, yaml, actions})
-			ws.mux.Unlock()
-		}(path)
-	}
-	wg.Wait()
-
+func applyUpdates(env *config.Env, project *Project) {
 	// Apply updates, if the user wants them.
+	// ASSUMPTION: `env.L.Vers` has been fully written to, and will only be read
+	// from here on.
 	ls := env.L.Vers
-	for _, workflow := range ws.ws {
-		wg.Add(1)
-		go func(wf Workflow) {
-			defer wg.Done()
-			newAs := newActionVers(ls, wf.actions)
-			yamlNew := update(newAs, wf.yaml)
+	for _, wf := range project.workflows {
+		newAs := newActionVers(ls, wf.actions)
+		yamlNew := update(newAs, wf.yaml)
 
-			if wf.yaml != yamlNew {
-				env.T.Mut.Lock()
-				defer env.T.Mut.Unlock()
-				resp := prompt(env, wf.path, newAs)
-				if resp {
-					ioutil.WriteFile(wf.path.full, []byte(yamlNew), 0644)
-					fmt.Println("Updated.")
-				} else {
-					fmt.Println("Skipping...")
-				}
+		if wf.yaml != yamlNew {
+			env.T.Mut.Lock()
+			defer env.T.Mut.Unlock()
+			resp := prompt(env, project.name, wf, newAs)
+			if resp {
+				ioutil.WriteFile(wf.path, []byte(yamlNew), 0644)
+				fmt.Println("Updated.")
+			} else {
+				fmt.Println("Skipping...")
 			}
-		}(workflow)
+		}
 	}
-	wg.Wait()
 }
 
 // Read the workflow file, if we can. Exit otherwise, since the user
 // probably wasn't expecting that their file was unreadable.
-func readWorkflow(path Path) string {
-	yamlRaw, err := ioutil.ReadFile(path.full)
+func readWorkflow(path string) string {
+	yamlRaw, err := ioutil.ReadFile(path)
 	utils.ExitIfErr(err)
 	return string(yamlRaw)
 }
@@ -255,7 +273,7 @@ func update(actions map[parsing.Action]string, yaml string) string {
 
 // We detected some changes to a workflow file, so we inform the user and ask
 // whether we should write the changes to disk.
-func prompt(env *config.Env, path Path, newAs map[parsing.Action]string) bool {
+func prompt(env *config.Env, projName string, workflow *Workflow, newAs map[parsing.Action]string) bool {
 	longestName := 0
 	longestVer := 0
 	for action := range newAs {
@@ -266,7 +284,7 @@ func prompt(env *config.Env, path Path, newAs map[parsing.Action]string) bool {
 			longestVer = len(action.Version)
 		}
 	}
-	fmt.Printf("\nUpdates available for %s: %s:\n", path.project, path.name)
+	fmt.Printf("\nUpdates available for %s: %s:\n", projName, filepath.Base(workflow.path))
 	for action, v := range newAs {
 		repo := action.Repo()
 		nameDiff := longestName - len(repo)
