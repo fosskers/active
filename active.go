@@ -87,8 +87,13 @@ func main() {
 	wg.Wait()
 
 	if *pushF {
-		fmt.Println("Would have done all the Git stuff here!")
-		// TODO All git interaction.
+		for _, proj := range projects {
+			if proj.success {
+				fmt.Printf("%s actually had changes!\n", proj.name)
+			} else {
+				fmt.Printf("The user skipped %s.\n", proj.name)
+			}
+		}
 	}
 
 	// GIT STUFF
@@ -193,6 +198,7 @@ func applyUpdates(env *config.Env, project *Project) {
 		newAs := newActionVers(ls, wf.actions)
 		yamlNew := update(newAs, wf.yaml)
 
+		// Only proceed if there were actually changes to consider.
 		if wf.yaml != yamlNew {
 			env.T.Mut.Lock()
 			defer env.T.Mut.Unlock()
@@ -200,6 +206,10 @@ func applyUpdates(env *config.Env, project *Project) {
 			if resp {
 				ioutil.WriteFile(wf.path, []byte(yamlNew), 0644)
 				fmt.Println("Updated.")
+
+				// Mutability to communicate back to `main` that the user
+				// accepted these changes.
+				project.success = true
 			} else {
 				fmt.Println("Skipping...")
 			}
