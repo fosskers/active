@@ -112,11 +112,13 @@ func main() {
 	fmt.Println("Done.")
 }
 
-// TODO Also consider the `local` flag.
-//
 // Will exit the program if there are no projects to check, or if a specified
 // project has no workflow files.
 func allProjects(c *config.Config) []*Project {
+	if *localF {
+		return []*Project{project(".")}
+	}
+
 	if len(c.Projects) == 0 {
 		fmt.Println("No projects to check. Try '--local' or setting your config file.")
 		os.Exit(1)
@@ -124,12 +126,7 @@ func allProjects(c *config.Config) []*Project {
 
 	ps := make([]*Project, 0)
 	for _, p := range c.Projects {
-		proj := project(p)
-		if len(proj.workflows) == 0 {
-			fmt.Printf("No workflow files detected for %s\n.", proj.name)
-			os.Exit(1)
-		}
-		ps = append(ps, proj)
+		ps = append(ps, project(p))
 	}
 	return ps
 }
@@ -137,7 +134,8 @@ func allProjects(c *config.Config) []*Project {
 // Given a local path to a Git repository, read everything from the filesystem
 // that's necessary for further processing.
 //
-// Exits the program if even one file fails to be read.
+// Exits the program if even one file fails to be read, or if there weren't any
+// to be read for the given project.
 func project(path string) *Project {
 	// If the user has asked for automatic commit pushing, attempt to the open
 	// local Git repo.
@@ -149,8 +147,13 @@ func project(path string) *Project {
 	}
 
 	// Read and parse all Workflow files.
+	name := filepath.Base(path)
 	wps, e1 := workflows(path)
 	utils.ExitIfErr(e1)
+	if len(wps) == 0 {
+		fmt.Printf("No workflow files detected for %s\n.", name)
+		os.Exit(1)
+	}
 	ws := make([]*Workflow, 0)
 	for _, wp := range wps {
 		yaml := readWorkflow(wp)
@@ -159,7 +162,6 @@ func project(path string) *Project {
 		ws = append(ws, &workflow)
 	}
 
-	name := filepath.Base(path)
 	return &Project{name: name, workflows: ws, repo: repo, success: false}
 }
 
