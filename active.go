@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fatih/color"
 	"github.com/fosskers/active/config"
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/releases"
@@ -16,6 +17,7 @@ import (
 	"github.com/go-git/go-git/v5"
 )
 
+// Paths.
 var home, _ = os.UserHomeDir()
 var confPath string = filepath.Join(home, ".config/active.yaml")
 
@@ -25,6 +27,11 @@ var tokenF *string = flag.String("token", "", "(optional) Github API OAuth Token
 var autoF *bool = flag.Bool("y", false, "Automatically apply changes.")
 var configPathF *string = flag.String("config", confPath, "Path to config file.")
 var pushF *bool = flag.Bool("push", false, "Automatically make commits and open a PR on Github.")
+
+// Coloured output.
+var cyan = color.New(color.FgCyan).SprintFunc()
+var yellow = color.New(color.FgYellow).SprintFunc()
+var green = color.New(color.FgGreen).SprintFunc()
 
 type Project struct {
 	name      string
@@ -64,7 +71,7 @@ func main() {
 	for _, proj := range projects {
 		for _, w := range proj.workflows {
 			spaces := strings.Repeat(" ", longest-len(proj.name))
-			fmt.Printf("  --> %s: %s%s\n", proj.name, spaces, filepath.Base(w.path))
+			fmt.Printf("  --> %s: %s%s\n", cyan(proj.name), spaces, filepath.Base(w.path))
 		}
 	}
 
@@ -107,7 +114,7 @@ func main() {
 				status, _ := w.Status()
 				fmt.Println(status.IsClean())
 			} else {
-				fmt.Printf("The user skipped %s.\n", proj.name)
+				fmt.Printf("The user skipped %s.\n", cyan(proj.name))
 			}
 		}
 	}
@@ -231,13 +238,13 @@ func applyUpdates(env *config.Env, project *Project) {
 				// This may require stashing unrelated changes.
 				if !switched {
 					if !status.IsClean() {
-						fmt.Printf("The working tree of %s is not clean. Stash before switching branches? [Y/n] ", project.name)
+						fmt.Printf("The working tree of %s is not clean. Stash before switching branches? [Y/n] ", cyan(project.name))
 						env.T.Scan.Scan()
 						toStash := env.T.Scan.Text()
 						if toStash == "Y" || toStash == "y" || toStash == "" {
 							fmt.Println("GOING FOR IT!")
 						} else {
-							fmt.Printf("Okay, I'll let you sort that one out. Skipping %s entirely...\n", project.name)
+							fmt.Printf("Okay, I'll let you sort that one out. Skipping %s entirely...\n", cyan(project.name))
 							return
 						}
 						os.Exit(1)
@@ -338,14 +345,14 @@ func prompt(env *config.Env, projName string, workflow *Workflow, newAs map[pars
 			longestVer = len(action.Version)
 		}
 	}
-	fmt.Printf("\nUpdates available for %s: %s:\n", projName, filepath.Base(workflow.path))
+	fmt.Printf("\nUpdates available for %s: %s:\n", cyan(projName), filepath.Base(workflow.path))
 	for action, v := range newAs {
 		repo := action.Repo()
 		nameDiff := longestName - len(repo)
 		verDiff := longestVer - len(action.Version)
 		spaces := strings.Repeat(" ", nameDiff+verDiff+1)
 		patt := "  %s" + spaces + "%s --> %s\n"
-		fmt.Printf(patt, repo, action.Version, v)
+		fmt.Printf(patt, repo, yellow(action.Version), green(v))
 	}
 
 	resp := "NO"
