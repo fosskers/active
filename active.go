@@ -41,8 +41,13 @@ type Workflow struct {
 }
 
 func main() {
-	flag.Parse()                             // Collect command-line options.
-	c := config.ReadConfig(*configPathF)     // Read the config file.
+	flag.Parse()                         // Collect command-line options.
+	c := config.ReadConfig(*configPathF) // Read the config file.
+
+	if *pushF && *tokenF == "" && c.Token == "" {
+		utils.PrintExit("A real token must be given when using '--push'.")
+	}
+
 	client := config.GithubClient(c, tokenF) // Github communication.
 	env := config.RuntimeEnv(client)         // Runtime environment.
 	projects := allProjects(c)
@@ -125,8 +130,7 @@ func allProjects(c *config.Config) []*Project {
 	}
 
 	if len(c.Projects) == 0 {
-		fmt.Println("No projects to check. Try '--local' or setting your config file.")
-		os.Exit(1)
+		utils.PrintExit("No projects to check. Try '--local' or setting your config file.")
 	}
 
 	ps := make([]*Project, 0)
@@ -156,8 +160,7 @@ func project(path string) *Project {
 	wps, e1 := workflows(path)
 	utils.ExitIfErr(e1)
 	if len(wps) == 0 {
-		fmt.Printf("No workflow files detected for %s\n.", name)
-		os.Exit(1)
+		utils.PrintExit("No workflow files detected for " + name)
 	}
 	ws := make([]*Workflow, 0)
 	for _, wp := range wps {

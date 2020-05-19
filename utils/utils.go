@@ -13,3 +13,8 @@ func ExitIfErr(err error) {
 		os.Exit(1)
 	}
 }
+
+func PrintExit(msg string) {
+	fmt.Println(msg)
+	os.Exit(1)
+}
