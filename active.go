@@ -95,6 +95,17 @@ func main() {
 		for _, proj := range projects {
 			if proj.success {
 				fmt.Printf("%s actually had changes!\n", proj.name)
+				// Git (if pushing):
+				// - Is the working tree clean? Prompt to stash if not.
+				// - Switch to master.
+				// - Branch of master to randomish branch: active/updates-abc123
+				// - Write changes and commit.
+				// - Push branch.
+				// - Switch back to master.
+
+				w, _ := proj.repo.Worktree()
+				status, _ := w.Status()
+				fmt.Println(status.IsClean())
 			} else {
 				fmt.Printf("The user skipped %s.\n", proj.name)
 			}
@@ -193,10 +204,18 @@ func workflows(project string) ([]string, error) {
 
 // Detect and apply updates.
 func applyUpdates(env *config.Env, project *Project) {
-	// Apply updates, if the user wants them.
 	// ASSUMPTION: `env.L.Vers` has been fully written to, and will only be read
 	// from here on.
 	ls := env.L.Vers
+	switched := false
+	var wt *git.Worktree
+	var status git.Status
+	if *pushF {
+		wt, _ = project.repo.Worktree()
+		status, _ = wt.Status()
+	}
+
+	// Apply updates, if the user wants them.
 	for _, wf := range project.workflows {
 		newAs := newActionVers(ls, wf.actions)
 		yamlNew := update(newAs, wf.yaml)
@@ -206,7 +225,27 @@ func applyUpdates(env *config.Env, project *Project) {
 			env.T.Mut.Lock()
 			defer env.T.Mut.Unlock()
 			resp := prompt(env, project.name, wf, newAs)
+
 			if resp {
+				// Switch git branches, if we haven't already.
+				// This may require stashing unrelated changes.
+				if !switched {
+					if !status.IsClean() {
+						fmt.Printf("The working tree of %s is not clean. Stash before switching branches? [Y/n] ", project.name)
+						env.T.Scan.Scan()
+						toStash := env.T.Scan.Text()
+						if toStash == "Y" || toStash == "y" || toStash == "" {
+							fmt.Println("GOING FOR IT!")
+						} else {
+							fmt.Printf("Okay, I'll let you sort that one out. Skipping %s entirely...\n", project.name)
+							return
+						}
+						os.Exit(1)
+					}
+
+					switched = true
+				}
+
 				ioutil.WriteFile(wf.path, []byte(yamlNew), 0644)
 				fmt.Println("Updated.")
 
@@ -308,6 +347,7 @@ func prompt(env *config.Env, projName string, workflow *Workflow, newAs map[pars
 		patt := "  %s" + spaces + "%s --> %s\n"
 		fmt.Printf(patt, repo, action.Version, v)
 	}
+
 	resp := "NO"
 	if !*autoF {
 		fmt.Printf("Would you like to apply them? [Y/n] ")
