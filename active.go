@@ -17,7 +17,6 @@ import (
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/utils"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
 // Paths.
@@ -230,7 +229,8 @@ func applyUpdates(env *config.Env, project *Project) {
 		if wf.yaml != yamlNew {
 			env.T.Mut.Lock()
 			defer env.T.Mut.Unlock()
-			resp := prompt(env, project.name, wf, newAs)
+			pn := project.name
+			resp := prompt(env, pn, wf, newAs)
 
 			if resp {
 				// Switch git branches, if we haven't already.
@@ -238,19 +238,24 @@ func applyUpdates(env *config.Env, project *Project) {
 				if *pushF && !switched {
 					// TODO Check staged changes as well.
 					if !status.IsClean() {
-						fmt.Println(status)
-						fmt.Printf("The working tree of %s is not clean. Skipping entirely...\n", cyan(project.name))
+						fmt.Printf("The working tree of %s is not clean. Skipping entirely...\n", cyan(pn))
 						return
 					}
 					// TODO Switch
 					fmt.Println("GOING FOR IT!")
-					headRef, e0 := project.repo.Head()
-					utils.ExitIfErr(e0)
-					ext := strconv.Itoa(rand.Int())
-					branch := plumbing.ReferenceName("refs/heads/active/update-" + ext)
-					ref := plumbing.NewHashReference(branch, headRef.Hash())
-					e1 := project.repo.Storer.SetReference(ref)
-					utils.ExitIfErr(e1)
+					e0 := gitutils.Checkout(project.repo, "master")
+					if e0 != nil {
+						fmt.Println(e0)
+						fmt.Printf("Unable to switch branches. Skipping %s...\n", cyan(pn))
+						return
+					}
+					branch := "active/" + strconv.Itoa(rand.Int())
+					e1 := gitutils.CheckoutCreate(project.repo, branch)
+					if e1 != nil {
+						fmt.Println(e1)
+						fmt.Printf("Unable to create a new branch. Skipping %s...\n", cyan(pn))
+						return
+					}
 					switched = true
 				}
 
