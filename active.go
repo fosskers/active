@@ -4,17 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/fatih/color"
 	"github.com/fosskers/active/config"
+	"github.com/fosskers/active/gitutils"
 	"github.com/fosskers/active/parsing"
-	"github.com/fosskers/active/releases"
 	"github.com/fosskers/active/utils"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 )
 
 // Paths.
@@ -109,10 +112,6 @@ func main() {
 				// - Write changes and commit.
 				// - Push branch.
 				// - Switch back to master.
-
-				w, _ := proj.repo.Worktree()
-				status, _ := w.Status()
-				fmt.Println(status.IsClean())
 			} else {
 				fmt.Printf("The user skipped %s.\n", cyan(proj.name))
 			}
@@ -236,20 +235,22 @@ func applyUpdates(env *config.Env, project *Project) {
 			if resp {
 				// Switch git branches, if we haven't already.
 				// This may require stashing unrelated changes.
-				if !switched {
+				if *pushF && !switched {
+					// TODO Check staged changes as well.
 					if !status.IsClean() {
-						fmt.Printf("The working tree of %s is not clean. Stash before switching branches? [Y/n] ", cyan(project.name))
-						env.T.Scan.Scan()
-						toStash := env.T.Scan.Text()
-						if toStash == "Y" || toStash == "y" || toStash == "" {
-							fmt.Println("GOING FOR IT!")
-						} else {
-							fmt.Printf("Okay, I'll let you sort that one out. Skipping %s entirely...\n", cyan(project.name))
-							return
-						}
-						os.Exit(1)
+						fmt.Println(status)
+						fmt.Printf("The working tree of %s is not clean. Skipping entirely...\n", cyan(project.name))
+						return
 					}
-
+					// TODO Switch
+					fmt.Println("GOING FOR IT!")
+					headRef, e0 := project.repo.Head()
+					utils.ExitIfErr(e0)
+					ext := strconv.Itoa(rand.Int())
+					branch := plumbing.ReferenceName("refs/heads/active/update-" + ext)
+					ref := plumbing.NewHashReference(branch, headRef.Hash())
+					e1 := project.repo.Storer.SetReference(ref)
+					utils.ExitIfErr(e1)
 					switched = true
 				}
 
@@ -300,7 +301,7 @@ func versionLookup(env *config.Env, a parsing.Action) {
 	env.W.Mut.Unlock()
 
 	// Version lookup and recording.
-	version, err := releases.Recent(env.C, a.Owner, a.Name)
+	version, err := gitutils.Recent(env.C, a.Owner, a.Name)
 	if err != nil {
 		return
 	}
