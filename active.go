@@ -4,12 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/fosskers/active/config"
@@ -271,7 +270,7 @@ func switchBranches(r *git.Repository) error {
 	if e0 != nil {
 		return fmt.Errorf("Unable to switch branches: %s", e0)
 	}
-	branch := "active/" + strconv.Itoa(rand.Int())
+	branch := "active/" + time.Now().Format("2006-01-02-15-04-05")
 	e1 := gitutils.CheckoutCreate(r, branch)
 	if e1 != nil {
 		return fmt.Errorf("Unable to create a new branch: %s", e1)
