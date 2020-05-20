@@ -7,6 +7,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v31/github"
 )
 
@@ -67,7 +68,7 @@ func CheckoutCreate(r *git.Repository, branch string) error {
 }
 
 // Commit the changes in some given filepaths.
-func Commit(r *git.Repository, files []string) error {
+func Commit(r *git.Repository, name string, email string, files []string) error {
 	w, e0 := r.Worktree()
 	if e0 != nil {
 		return e0
@@ -79,15 +80,18 @@ func Commit(r *git.Repository, files []string) error {
 		}
 	}
 	_, e2 := w.Commit("[active] Updating Github Actions", &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "Colin Woodbury",
-			Email: "colin@fosskers.ca",
-			When:  time.Now(),
-		},
+		Author: &object.Signature{Name: name, Email: email, When: time.Now()},
 	})
 	if e2 != nil {
 		return e2
 	}
 
 	return nil
+}
+
+// Push the current branch.
+func Push(r *git.Repository, user string, token string) error {
+	return r.Push(&git.PushOptions{
+		Auth: &http.BasicAuth{Username: user, Password: token},
+	})
 }

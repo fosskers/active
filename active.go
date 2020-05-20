@@ -54,7 +54,7 @@ func main() {
 	flag.Parse()                         // Collect command-line options.
 	c := config.ReadConfig(*configPathF) // Read the config file.
 
-	if *pushF && *tokenF == "" && c.Token == "" {
+	if *pushF && *tokenF == "" && c.Git.Token == "" {
 		utils.PrintExit("A real token must be given when using '--push'.")
 	}
 
@@ -108,12 +108,16 @@ func main() {
 				wg.Add(1)
 				go func(p *Project) {
 					defer wg.Done()
-					e0 := gitutils.Commit(p.repo, p.accepted)
+					e0 := gitutils.Commit(p.repo, c.Git.Name, c.Git.Email, p.accepted)
 					if e0 != nil {
 						fmt.Printf("Couldn't commit %s: %s\n", cyan(p.name), e0)
 						return
 					}
-					// gitutils.Push(p.repo)
+					e1 := gitutils.Push(p.repo, c.Git.User, c.Git.Token)
+					if e1 != nil {
+						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
+						return
+					}
 					// gitutils.PR(p.repo)
 				}(proj)
 			}

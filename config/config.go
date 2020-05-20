@@ -16,7 +16,14 @@ import (
 // Settings read from a config file.
 type Config struct {
 	Projects []string `yaml:"projects"`
-	Token    string   `yaml:"token"`
+	Git      Git      `yaml:"git"`
+}
+
+type Git struct {
+	Name  string `yaml:"name"`
+	Email string `yaml:"email"`
+	User  string `yaml:"user"`
+	Token string `yaml:"token"`
 }
 
 // During the lookup of the latest version of an `Action`, we don't want to call
@@ -69,12 +76,12 @@ func ReadConfig(path string) *Config {
 }
 
 func GithubClient(config *Config, token *string) *github.Client {
-	if *token == "" && config.Token == "" {
+	if *token == "" && config.Git.Token == "" {
 		return github.NewClient(nil)
 	} else {
 		tok := *token
 		if tok == "" {
-			tok = config.Token
+			tok = config.Git.Token
 		}
 		ctx := context.Background()
 		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: tok})
