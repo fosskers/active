@@ -213,12 +213,6 @@ func applyUpdates(env *config.Env, project *Project) {
 	// from here on.
 	ls := env.L.Vers
 	switched := false
-	var wt *git.Worktree
-	var status git.Status
-	if *pushF {
-		wt, _ = project.repo.Worktree()
-		status, _ = wt.Status()
-	}
 
 	// Apply updates, if the user wants them.
 	for _, wf := range project.workflows {
@@ -229,31 +223,14 @@ func applyUpdates(env *config.Env, project *Project) {
 		if wf.yaml != yamlNew {
 			env.T.Mut.Lock()
 			defer env.T.Mut.Unlock()
-			pn := project.name
-			resp := prompt(env, pn, wf, newAs)
+			resp := prompt(env, project.name, wf, newAs)
 
 			if resp {
-				// Switch git branches, if we haven't already.
-				// This may require stashing unrelated changes.
 				if *pushF && !switched {
-					// TODO Check staged changes as well.
-					if !status.IsClean() {
-						fmt.Printf("The working tree of %s is not clean. Skipping entirely...\n", cyan(pn))
-						return
-					}
-					// TODO Switch
-					fmt.Println("GOING FOR IT!")
-					e0 := gitutils.Checkout(project.repo, "master")
+					e0 := switchBranches(project.repo)
 					if e0 != nil {
 						fmt.Println(e0)
-						fmt.Printf("Unable to switch branches. Skipping %s...\n", cyan(pn))
-						return
-					}
-					branch := "active/" + strconv.Itoa(rand.Int())
-					e1 := gitutils.CheckoutCreate(project.repo, branch)
-					if e1 != nil {
-						fmt.Println(e1)
-						fmt.Printf("Unable to create a new branch. Skipping %s...\n", cyan(pn))
+						fmt.Printf("Skipping %s...\n", cyan(project.name))
 						return
 					}
 					switched = true
@@ -270,6 +247,36 @@ func applyUpdates(env *config.Env, project *Project) {
 			}
 		}
 	}
+}
+
+// Switch git branches, if we haven't already. go-git does not
+// support stashing, so if the working tree isn't clean, we have
+// to skip this Project entirely.
+func switchBranches(r *git.Repository) error {
+	wt, e9 := r.Worktree()
+	if e9 != nil {
+		return e9
+	}
+
+	status, e8 := wt.Status()
+	if e8 != nil {
+		return e8
+	}
+
+	// TODO Check staged changes as well.
+	if !status.IsClean() {
+		return fmt.Errorf("The working tree is not clean.")
+	}
+	e0 := gitutils.Checkout(r, "master")
+	if e0 != nil {
+		return fmt.Errorf("Unable to switch branches: %s", e0)
+	}
+	branch := "active/" + strconv.Itoa(rand.Int())
+	e1 := gitutils.CheckoutCreate(r, branch)
+	if e1 != nil {
+		return fmt.Errorf("Unable to create a new branch: %s", e1)
+	}
+	return nil
 }
 
 // Read the workflow file, if we can. Exit otherwise, since the user
