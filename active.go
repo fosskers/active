@@ -29,6 +29,8 @@ var autoF *bool = flag.Bool("y", false, "Automatically apply changes.")
 var configPathF *string = flag.String("config", confPath, "Path to config file.")
 var pushF *bool = flag.Bool("push", false, "Automatically make commits and open a PR on Github.")
 
+// TODO Flag for turning off colours.
+
 // Coloured output.
 var cyan = color.New(color.FgCyan).SprintFunc()
 var yellow = color.New(color.FgYellow).SprintFunc()
@@ -38,7 +40,7 @@ type Project struct {
 	name      string
 	workflows []*Workflow
 	repo      *git.Repository
-	success   bool // Icky mutable field.
+	accepted  []string // Mutable field.
 }
 
 // All data pertaining to a fully read and parsed Workflow file.
@@ -99,40 +101,25 @@ func main() {
 	}
 	wg.Wait()
 
+	// Commit and push updates to Github.
 	if *pushF {
 		for _, proj := range projects {
-			if proj.success {
-				fmt.Printf("%s actually had changes!\n", proj.name)
-				// Git (if pushing):
-				// - Is the working tree clean? Prompt to stash if not.
-				// - Switch to master.
-				// - Branch of master to randomish branch: active/updates-abc123
-				// - Write changes and commit.
-				// - Push branch.
-				// - Switch back to master.
-			} else {
-				fmt.Printf("The user skipped %s.\n", cyan(proj.name))
+			if len(proj.accepted) > 0 {
+				wg.Add(1)
+				go func(p *Project) {
+					defer wg.Done()
+					e0 := gitutils.Commit(p.repo, p.accepted)
+					if e0 != nil {
+						fmt.Printf("Couldn't commit %s: %s\n", cyan(p.name), e0)
+						return
+					}
+					// gitutils.Push(p.repo)
+					// gitutils.PR(p.repo)
+				}(proj)
 			}
 		}
+		wg.Wait()
 	}
-
-	// GIT STUFF
-	// TODO Change data representation. `Path`s from the same project
-	// need to be kept together, so that we only need to make one commit.
-	// r, e0 := git.PlainOpen("/home/colin/code/haskell/versions")
-	// utils.ExitIfErr(e0)
-	// w, e1 := r.Worktree()
-	// utils.ExitIfErr(e1)
-	// _, e3 := w.Add(".github/workflows/ci.yaml")
-	// utils.ExitIfErr(e3)
-	// _, e2 := w.Commit("[active] Updating Github Actions", &git.CommitOptions{
-	//	Author: &object.Signature{
-	//		Name:  "Colin Woodbury",
-	//		Email: "colin@fosskers.ca",
-	//		When:  time.Now(),
-	//	},
-	// })
-	// utils.ExitIfErr(e2)
 
 	fmt.Println("Done.")
 }
@@ -185,7 +172,7 @@ func project(path string) *Project {
 		ws = append(ws, &workflow)
 	}
 
-	return &Project{name: name, workflows: ws, repo: repo, success: false}
+	return &Project{name: name, workflows: ws, repo: repo, accepted: make([]string, 0)}
 }
 
 // Given a local path to a code repository, find the paths of all its Github
@@ -240,7 +227,8 @@ func applyUpdates(env *config.Env, project *Project) {
 
 				// Mutability to communicate back to `main` that the user
 				// accepted these changes.
-				project.success = true
+				path := filepath.Join(".github/workflows", filepath.Base(wf.path))
+				project.accepted = append(project.accepted, path)
 			} else {
 				fmt.Println("Skipping...")
 			}

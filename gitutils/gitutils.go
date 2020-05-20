@@ -2,9 +2,11 @@ package gitutils
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/google/go-github/v31/github"
 )
 
@@ -56,6 +58,32 @@ func CheckoutCreate(r *git.Repository, branch string) error {
 		Hash:   ref.Hash(),
 		Branch: plumbing.ReferenceName("refs/heads/" + branch),
 		Create: true,
+	})
+	if e2 != nil {
+		return e2
+	}
+
+	return nil
+}
+
+// Commit the changes in some given filepaths.
+func Commit(r *git.Repository, files []string) error {
+	w, e0 := r.Worktree()
+	if e0 != nil {
+		return e0
+	}
+	for _, file := range files {
+		_, e1 := w.Add(file)
+		if e1 != nil {
+			return e1
+		}
+	}
+	_, e2 := w.Commit("[active] Updating Github Actions", &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Colin Woodbury",
+			Email: "colin@fosskers.ca",
+			When:  time.Now(),
+		},
 	})
 	if e2 != nil {
 		return e2
