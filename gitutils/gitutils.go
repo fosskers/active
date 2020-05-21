@@ -2,6 +2,7 @@ package gitutils
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -112,4 +113,59 @@ func PullRequest(client *github.Client, owner string, repo string, branch string
 	_, _, e0 := client.PullRequests.Create(context.Background(), owner, repo, pr)
 
 	return e0
+}
+
+// Pick a suitable "remote" to push to later, defaulting to one that was created
+// previously by this tool.
+func ChooseRemote(rs []*git.Remote) *git.Remote {
+	for _, r := range rs {
+		if r.Config().Name == "active" {
+			return r
+		}
+	}
+	for _, r := range rs {
+		if r.Config().Name == "origin" {
+			return r
+		}
+	}
+	if len(rs) > 0 {
+		return rs[0]
+	}
+	return nil
+}
+
+// Fetch or create an HTTP-based remote that we can used to push via the given
+// Github API token.
+func PushableRemote(repo *git.Repository) (string, error) {
+	rs, e0 := repo.Remotes()
+	if e0 != nil {
+		return "", e0
+	}
+
+	chosen := ChooseRemote(rs)
+	if chosen == nil {
+		return "", fmt.Errorf("No remotes found.")
+	}
+
+	config := chosen.Config()
+	if config == nil {
+		return "", fmt.Errorf("Couldn't fetch RemoteConfig.")
+	}
+
+	// We had already created a usable remote.
+	if config.Name == "active" {
+		return "active", nil
+	}
+
+	thing := config.RemoteConfig{
+		Name: "active",
+		URLs: []string{},
+	}
+
+	_, e1 := repo.CreateRemote(&thing)
+	if e1 != nil {
+		return "", e1
+	}
+
+	return "active", nil
 }

@@ -144,10 +144,9 @@ First step: perform this on a local repo!
   - [x] CLI flag for changing config location
 - [ ] Github interaction
   - [x] Release ver lookup
-  - [ ] `--push` flag to make a commit and push a branch.
-  - [ ] Apply the change automatically?
-  - [ ] Push up a branch?
-  - [ ] Open a PR from that branch? (seems possible with the `github` lib!)
+  - [x] `--push` flag to make a commit and push a branch.
+  - [x] Push up a branch?
+  - [x] Open a PR from that branch? (seems possible with the `github` lib!)
 - [x] Basic file IO
 - [x] Parse a `.yaml` and look for usage of Actions
 - [x] Produce a diff of the change
@@ -161,9 +160,9 @@ First step: perform this on a local repo!
   - [ ] README 和訳
 - [ ] README
   - [x] CI badge
-  - [ ] Usage examples and sample output
+  - [x] Usage examples and sample output
   - [ ] Setting up OAuth
-  - [ ] Table of Contents
+  - [x] Table of Contents
 - [x] Changelog
 - [ ] Official release
   - [ ] Github release

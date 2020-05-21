@@ -38,6 +38,8 @@ var green = color.New(color.FgGreen).SprintFunc()
 
 type Project struct {
 	name      string
+	owner     string
+	remote    string
 	workflows []*Workflow
 	repo      *git.Repository
 	accepted  []string // Mutable field.
@@ -109,6 +111,7 @@ func main() {
 				wg.Add(1)
 				go func(p *Project) {
 					defer wg.Done()
+					defer gitutils.Checkout(p.repo, "master")
 					e0 := gitutils.Commit(p.repo, c.Git.Name, c.Git.Email, p.accepted)
 					if e0 != nil {
 						fmt.Printf("Couldn't commit %s: %s\n", cyan(p.name), e0)
@@ -119,9 +122,7 @@ func main() {
 						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
 						return
 					}
-					// TODO Figure out the owner from the `remote` definition in
-					// the git config of the project.
-					e2 := gitutils.PullRequest(client, "fosskers", p.name, p.branch)
+					e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
 					if e2 != nil {
 						fmt.Printf("Opening a PR for %s failed: %s\n", cyan(p.name), e2)
 						return
@@ -160,17 +161,27 @@ func allProjects(c *config.Config) []*Project {
 // Exits the program if even one file fails to be read, or if there weren't any
 // to be read for the given project.
 func project(path string) *Project {
+	name := filepath.Base(path)
+
+	// TODO Or should I just create a remote instead that's guaranteed to have the
+	// https scheme? Perhaps `GetOrCreateRemote`? It would have to scan existing
+	// remotes to find out who the owner of `origin` is.
 	// If the user has asked for automatic commit pushing, attempt to the open
 	// local Git repo.
 	var repo *git.Repository
+	owner := ""
+	remote := ""
 	if *pushF {
 		r, e0 := git.PlainOpen(path)
 		utils.ExitIfErr(e0)
 		repo = r
+
+		rem, e1 := gitutils.PushableRemote(r)
+		utils.ExitIfErr(e1)
+		remote = rem
 	}
 
 	// Read and parse all Workflow files.
-	name := filepath.Base(path)
 	wps, e1 := workflows(path)
 	utils.ExitIfErr(e1)
 	if len(wps) == 0 {
@@ -184,7 +195,14 @@ func project(path string) *Project {
 		ws = append(ws, &workflow)
 	}
 
-	return &Project{name: name, workflows: ws, repo: repo, accepted: make([]string, 0)}
+	return &Project{
+		name:      name,
+		owner:     owner,
+		remote:    remote,
+		workflows: ws,
+		repo:      repo,
+		accepted:  make([]string, 0),
+	}
 }
 
 // Given a local path to a code repository, find the paths of all its Github
