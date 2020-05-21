@@ -117,12 +117,13 @@ func main() {
 						fmt.Printf("Couldn't commit %s: %s\n", cyan(p.name), e0)
 						return
 					}
-					e1 := gitutils.Push(p.repo, p.branch, c.Git.User, c.Git.Token)
+					e1 := gitutils.Push(p.repo, p.remote, p.branch, c.Git.User, c.Git.Token)
 					if e1 != nil {
 						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
 						return
 					}
-					e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
+					// e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
+					e2 := gitutils.PullRequest(client, "fosskers", p.name, p.branch)
 					if e2 != nil {
 						fmt.Printf("Opening a PR for %s failed: %s\n", cyan(p.name), e2)
 						return
@@ -179,6 +180,8 @@ func project(path string) *Project {
 		rem, e1 := gitutils.PushableRemote(r)
 		utils.ExitIfErr(e1)
 		remote = rem
+
+		// TODO Owner
 	}
 
 	// Read and parse all Workflow files.

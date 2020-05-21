@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -93,12 +94,13 @@ func Commit(r *git.Repository, name string, email string, files []string) error 
 }
 
 // Push the given branch.
-func Push(r *git.Repository, branch string, user string, token string) error {
+func Push(r *git.Repository, remote string, branch string, user string, token string) error {
 	src := filepath.Join("refs/heads/", branch)
 	spec := config.RefSpec(src + ":" + src)
 	return r.Push(&git.PushOptions{
-		RefSpecs: []config.RefSpec{spec},
-		Auth:     &http.BasicAuth{Username: user, Password: token},
+		RemoteName: remote,
+		RefSpecs:   []config.RefSpec{spec},
+		Auth:       &http.BasicAuth{Username: user, Password: token},
 	})
 }
 
@@ -147,22 +149,36 @@ func PushableRemote(repo *git.Repository) (string, error) {
 		return "", fmt.Errorf("No remotes found.")
 	}
 
-	config := chosen.Config()
-	if config == nil {
+	rc := chosen.Config()
+	if rc == nil {
 		return "", fmt.Errorf("Couldn't fetch RemoteConfig.")
 	}
 
+	if len(rc.URLs) == 0 {
+		return "", fmt.Errorf("Given remote had no URLs!")
+	}
+
 	// We had already created a usable remote.
-	if config.Name == "active" {
+	if rc.Name == "active" {
 		return "active", nil
 	}
 
-	thing := config.RemoteConfig{
-		Name: "active",
-		URLs: []string{},
+	// We don't need to create a new remote; the one given uses HTTPS already.
+	if rc.URLs[0][0:5] == "https" {
+		return rc.Name, nil
 	}
 
-	_, e1 := repo.CreateRemote(&thing)
+	base := "https://" + strings.ReplaceAll(rc.URLs[0][4:], ":", "/")
+
+	fmt.Printf("It was: %s\n", rc.URLs[0])
+	fmt.Printf("Making new remote: %s\n", base)
+
+	new := config.RemoteConfig{
+		Name: "active",
+		URLs: []string{base},
+	}
+
+	_, e1 := repo.CreateRemote(&new)
 	if e1 != nil {
 		return "", e1
 	}
