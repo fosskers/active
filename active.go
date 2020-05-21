@@ -119,7 +119,14 @@ func main() {
 						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
 						return
 					}
-					// gitutils.PR(p.repo)
+					// TODO Figure out the owner from the `remote` definition in
+					// the git config of the project.
+					e2 := gitutils.PullRequest(client, "fosskers", p.name, p.branch)
+					if e2 != nil {
+						fmt.Printf("Opening a PR for %s failed: %s\n", cyan(p.name), e2)
+						return
+					}
+					fmt.Printf("Successfully opened a PR for %s!\n", cyan(p.name))
 				}(proj)
 			}
 		}

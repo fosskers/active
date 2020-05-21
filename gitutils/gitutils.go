@@ -100,3 +100,16 @@ func Push(r *git.Repository, branch string, user string, token string) error {
 		Auth:     &http.BasicAuth{Username: user, Password: token},
 	})
 }
+
+func PullRequest(client *github.Client, owner string, repo string, branch string) error {
+	pr := &github.NewPullRequest{
+		Title:               github.String("Github CI Action Updates"),
+		Head:                github.String(branch),
+		Base:                github.String("master"),
+		Body:                github.String("This PR was opened automatically by the `active` tool."),
+		MaintainerCanModify: github.Bool(true),
+	}
+	_, _, e0 := client.PullRequests.Create(context.Background(), owner, repo, pr)
+
+	return e0
+}
