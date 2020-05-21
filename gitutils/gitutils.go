@@ -2,9 +2,11 @@ package gitutils
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -89,9 +91,12 @@ func Commit(r *git.Repository, name string, email string, files []string) error 
 	return nil
 }
 
-// Push the current branch.
-func Push(r *git.Repository, user string, token string) error {
+// Push the given branch.
+func Push(r *git.Repository, branch string, user string, token string) error {
+	src := filepath.Join("refs/heads/", branch)
+	spec := config.RefSpec(src + ":" + src)
 	return r.Push(&git.PushOptions{
-		Auth: &http.BasicAuth{Username: user, Password: token},
+		RefSpecs: []config.RefSpec{spec},
+		Auth:     &http.BasicAuth{Username: user, Password: token},
 	})
 }

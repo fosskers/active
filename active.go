@@ -41,6 +41,7 @@ type Project struct {
 	workflows []*Workflow
 	repo      *git.Repository
 	accepted  []string // Mutable field.
+	branch    string
 }
 
 // All data pertaining to a fully read and parsed Workflow file.
@@ -113,7 +114,7 @@ func main() {
 						fmt.Printf("Couldn't commit %s: %s\n", cyan(p.name), e0)
 						return
 					}
-					e1 := gitutils.Push(p.repo, c.Git.User, c.Git.Token)
+					e1 := gitutils.Push(p.repo, p.branch, c.Git.User, c.Git.Token)
 					if e1 != nil {
 						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
 						return
@@ -217,13 +218,14 @@ func applyUpdates(env *config.Env, project *Project) {
 
 			if resp {
 				if *pushF && !switched {
-					e0 := switchBranches(project.repo)
+					branch, e0 := switchBranches(project.repo)
 					if e0 != nil {
 						fmt.Println(e0)
 						fmt.Printf("Skipping %s...\n", cyan(project.name))
 						return
 					}
 					switched = true
+					project.branch = branch
 				}
 
 				ioutil.WriteFile(wf.path, []byte(yamlNew), 0644)
@@ -243,31 +245,31 @@ func applyUpdates(env *config.Env, project *Project) {
 // Switch git branches, if we haven't already. go-git does not
 // support stashing, so if the working tree isn't clean, we have
 // to skip this Project entirely.
-func switchBranches(r *git.Repository) error {
+func switchBranches(r *git.Repository) (string, error) {
 	wt, e9 := r.Worktree()
 	if e9 != nil {
-		return e9
+		return "", e9
 	}
 
 	status, e8 := wt.Status()
 	if e8 != nil {
-		return e8
+		return "", e8
 	}
 
 	// TODO Check staged changes as well.
 	if !status.IsClean() {
-		return fmt.Errorf("The working tree is not clean.")
+		return "", fmt.Errorf("The working tree is not clean.")
 	}
 	e0 := gitutils.Checkout(r, "master")
 	if e0 != nil {
-		return fmt.Errorf("Unable to switch branches: %s", e0)
+		return "", fmt.Errorf("Unable to switch branches: %s", e0)
 	}
 	branch := "active/" + time.Now().Format("2006-01-02-15-04-05")
 	e1 := gitutils.CheckoutCreate(r, branch)
 	if e1 != nil {
-		return fmt.Errorf("Unable to create a new branch: %s", e1)
+		return "", fmt.Errorf("Unable to create a new branch: %s", e1)
 	}
-	return nil
+	return branch, nil
 }
 
 // Read the workflow file, if we can. Exit otherwise, since the user
