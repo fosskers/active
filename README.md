@@ -10,16 +10,12 @@
 
 - [Overview](#overview)
 - [Installation](#installation)
-    - [Arch Linux](#arch-linux)
-    - [Via `go get`](#via-go-get)
-    - [From Source](#from-source)
 - [Usage](#usage)
     - [Local Repository](#local-repository)
     - [Batch Updates](#batch-updates)
     - [Automatic PRs](#automatic-prs)
 - [Configuration](#configuration)
     - [OAuth](#oauth)
-- [TODOs](#todos)
 
 <!-- markdown-toc end -->
 
@@ -53,27 +49,10 @@ Updated.
 
 # Installation
 
-## Arch Linux
-
-With an AUR-compatible package manager like
-[Aura](https://aur.archlinux.org/packages/aura-bin/) installed:
-
-```bash
-sudo aura -Aa active
-```
-
-## Via `go get`
-
-Hello.
-
-## From Source
-
 Assuming you have a [Golang environment set up](https://golang.org/doc/install):
 
 ```bash
-git clone https://github.com/fosskers/active.git
-cd active
-go install
+go get github.com/fosskers/active
 ```
 
 # Usage
@@ -164,39 +143,3 @@ Settings](https://github.com/settings/tokens) on Github. Click **Generate new
 token**, and give it `public_repo` permissions:
 
 ![](token.png)
-
-# TODOs
-
-First step: perform this on a local repo!
-
-- [x] CLI flags
-  - [x] Echo some arg
-  - [x] Specify a project to check
-- [x] `.yaml` config file parsing
-  - [x] List of projects to check
-  - [x] Oauth token
-  - [x] CLI flag for changing config location
-- [x] Github interaction
-  - [x] Release ver lookup
-  - [x] `--push` flag to make a commit and push a branch.
-  - [x] Push up a branch?
-  - [x] Open a PR from that branch? (seems possible with the `github` lib!)
-- [x] Basic file IO
-- [x] Parse a `.yaml` and look for usage of Actions
-- [x] Produce a diff of the change
-- [x] Flag for automatically applying the diff
-- [x] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
-- [x] Good use of concurrency
-- [x] Set up CI
-- [ ] README
-  - [x] CI badge
-  - [x] Usage examples and sample output
-  - [x] Setting up OAuth
-  - [x] Table of Contents
-  - [ ] 和訳
-- [x] Changelog
-- [ ] Official release
-  - [ ] Github release
-  - [ ] Gopkgs release?
-  - [ ] AUR package
-  - [ ] Brew package
