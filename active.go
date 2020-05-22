@@ -16,6 +16,7 @@ import (
 	"github.com/fosskers/active/parsing"
 	"github.com/fosskers/active/utils"
 	"github.com/go-git/go-git/v5"
+	"github.com/google/go-github/v31/github"
 )
 
 // Paths.
@@ -115,19 +116,9 @@ func main() {
 				go func(p *Project) {
 					defer wg.Done()
 					defer gitutils.Checkout(p.repo, "master")
-					e0 := gitutils.Commit(p.repo, c.Git.Name, c.Git.Email, p.accepted)
-					if e0 != nil {
-						fmt.Printf("Couldn't commit %s: %s\n", cyan(p.name), e0)
-						return
-					}
-					e1 := gitutils.Push(p.repo, p.remote, p.branch, c.Git.User, c.Git.Token)
-					if e1 != nil {
-						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
-						return
-					}
-					pr, e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
-					if e2 != nil {
-						fmt.Printf("Opening a PR for %s failed: %s\n", cyan(p.name), e2)
+					pr, e := commitAndPush(client, c, p)
+					if e != nil {
+						fmt.Println(e)
 						return
 					}
 					fmt.Printf("Successfully opened a PR for %s! (#%d)\n", cyan(p.name), pr)
@@ -259,8 +250,9 @@ func applyUpdates(env *config.Env, project *Project) {
 				// accepted these changes.
 				path := filepath.Join(".github/workflows", filepath.Base(wf.path))
 				project.accepted = append(project.accepted, path)
+			} else {
+				fmt.Println("Skipping...")
 			}
-			fmt.Println("Skipping...")
 			env.T.Mut.Unlock()
 		}
 	}
@@ -391,4 +383,22 @@ func prompt(env *config.Env, projName string, workflow *Workflow, newAs map[pars
 		resp = env.T.Scan.Text()
 	}
 	return *autoF || resp == "Y" || resp == "y" || resp == ""
+}
+
+// Attempt to commit the changes, push the branch, and open a new PR.
+// The yielded int is the number of the new PR, if opened.
+func commitAndPush(client *github.Client, c *config.Config, p *Project) (int, error) {
+	e0 := gitutils.Commit(p.repo, c.Git.Name, c.Git.Email, p.accepted)
+	if e0 != nil {
+		return 0, fmt.Errorf("Couldn't commit %s: %s\n", cyan(p.name), e0)
+	}
+	e1 := gitutils.Push(p.repo, p.remote, p.branch, c.Git.User, c.Git.Token)
+	if e1 != nil {
+		return 0, fmt.Errorf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
+	}
+	pr, e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
+	if e2 != nil {
+		return 0, fmt.Errorf("Opening a PR for %s failed: %s\n", cyan(p.name), e2)
+	}
+	return pr, nil
 }
