@@ -125,12 +125,12 @@ func main() {
 						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
 						return
 					}
-					e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
+					pr, e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
 					if e2 != nil {
 						fmt.Printf("Opening a PR for %s failed: %s\n", cyan(p.name), e2)
 						return
 					}
-					fmt.Printf("Successfully opened a PR for %s!\n", cyan(p.name))
+					fmt.Printf("Successfully opened a PR for %s! (#%d)\n", cyan(p.name), pr)
 				}(proj)
 			}
 		}
@@ -237,7 +237,6 @@ func applyUpdates(env *config.Env, project *Project) {
 		// Only proceed if there were actually changes to consider.
 		if wf.yaml != yamlNew {
 			env.T.Mut.Lock()
-			defer env.T.Mut.Unlock()
 			resp := prompt(env, project.name, wf, newAs)
 
 			if resp {
@@ -246,6 +245,7 @@ func applyUpdates(env *config.Env, project *Project) {
 					if e0 != nil {
 						fmt.Println(e0)
 						fmt.Printf("Skipping %s...\n", cyan(project.name))
+						env.T.Mut.Unlock()
 						return
 					}
 					switched = true
@@ -259,9 +259,9 @@ func applyUpdates(env *config.Env, project *Project) {
 				// accepted these changes.
 				path := filepath.Join(".github/workflows", filepath.Base(wf.path))
 				project.accepted = append(project.accepted, path)
-			} else {
-				fmt.Println("Skipping...")
 			}
+			fmt.Println("Skipping...")
+			env.T.Mut.Unlock()
 		}
 	}
 }
@@ -280,7 +280,6 @@ func switchBranches(r *git.Repository) (string, error) {
 		return "", e8
 	}
 
-	// TODO Check staged changes as well.
 	if !status.IsClean() {
 		return "", fmt.Errorf("The working tree is not clean.")
 	}

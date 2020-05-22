@@ -104,17 +104,18 @@ func Push(r *git.Repository, remote string, branch string, user string, token st
 	})
 }
 
-func PullRequest(client *github.Client, owner string, repo string, branch string) error {
-	pr := &github.NewPullRequest{
+// Open a pull request, and return its number.
+func PullRequest(c *github.Client, owner string, repo string, branch string) (int, error) {
+	new := &github.NewPullRequest{
 		Title:               github.String("Github CI Action Updates"),
 		Head:                github.String(branch),
 		Base:                github.String("master"),
 		Body:                github.String("This PR was opened automatically by the `active` tool."),
 		MaintainerCanModify: github.Bool(true),
 	}
-	_, _, e0 := client.PullRequests.Create(context.Background(), owner, repo, pr)
+	pr, _, e0 := c.PullRequests.Create(context.Background(), owner, repo, new)
 
-	return e0
+	return *pr.Number, e0
 }
 
 // Pick a suitable "remote" to push to later, defaulting to one that was created
