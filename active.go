@@ -122,8 +122,7 @@ func main() {
 						fmt.Printf("Unable to push %s to Github: %s\n", cyan(p.name), e1)
 						return
 					}
-					// e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
-					e2 := gitutils.PullRequest(client, "fosskers", p.name, p.branch)
+					e2 := gitutils.PullRequest(client, p.owner, p.name, p.branch)
 					if e2 != nil {
 						fmt.Printf("Opening a PR for %s failed: %s\n", cyan(p.name), e2)
 						return
@@ -164,11 +163,6 @@ func allProjects(c *config.Config) []*Project {
 func project(path string) *Project {
 	name := filepath.Base(path)
 
-	// TODO Or should I just create a remote instead that's guaranteed to have the
-	// https scheme? Perhaps `GetOrCreateRemote`? It would have to scan existing
-	// remotes to find out who the owner of `origin` is.
-	// If the user has asked for automatic commit pushing, attempt to the open
-	// local Git repo.
 	var repo *git.Repository
 	owner := ""
 	remote := ""
@@ -177,11 +171,10 @@ func project(path string) *Project {
 		utils.ExitIfErr(e0)
 		repo = r
 
-		rem, e1 := gitutils.PushableRemote(r)
+		rem, own, e1 := gitutils.PushableRemote(r)
 		utils.ExitIfErr(e1)
 		remote = rem
-
-		// TODO Owner
+		owner = own
 	}
 
 	// Read and parse all Workflow files.

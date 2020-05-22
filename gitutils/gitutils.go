@@ -137,41 +137,36 @@ func ChooseRemote(rs []*git.Remote) *git.Remote {
 }
 
 // Fetch or create an HTTP-based remote that we can used to push via the given
-// Github API token.
-func PushableRemote(repo *git.Repository) (string, error) {
+// Github API token. Yields the name of the remote, as well as the owner of the
+// repo.
+func PushableRemote(repo *git.Repository) (string, string, error) {
 	rs, e0 := repo.Remotes()
 	if e0 != nil {
-		return "", e0
+		return "", "", e0
 	}
 
 	chosen := ChooseRemote(rs)
 	if chosen == nil {
-		return "", fmt.Errorf("No remotes found.")
+		return "", "", fmt.Errorf("No remotes found.")
 	}
 
 	rc := chosen.Config()
 	if rc == nil {
-		return "", fmt.Errorf("Couldn't fetch RemoteConfig.")
+		return "", "", fmt.Errorf("Couldn't fetch RemoteConfig.")
 	}
 
 	if len(rc.URLs) == 0 {
-		return "", fmt.Errorf("Given remote had no URLs!")
-	}
-
-	// We had already created a usable remote.
-	if rc.Name == "active" {
-		return "active", nil
+		return "", "", fmt.Errorf("Given remote had no URLs!")
 	}
 
 	// We don't need to create a new remote; the one given uses HTTPS already.
 	if rc.URLs[0][0:5] == "https" {
-		return rc.Name, nil
+		owner := strings.Split(rc.URLs[0][8:], "/")[1]
+		return rc.Name, owner, nil
 	}
 
 	base := "https://" + strings.ReplaceAll(rc.URLs[0][4:], ":", "/")
-
-	fmt.Printf("It was: %s\n", rc.URLs[0])
-	fmt.Printf("Making new remote: %s\n", base)
+	owner := strings.Split(base[8:], "/")[1]
 
 	new := config.RemoteConfig{
 		Name: "active",
@@ -180,8 +175,8 @@ func PushableRemote(repo *git.Repository) (string, error) {
 
 	_, e1 := repo.CreateRemote(&new)
 	if e1 != nil {
-		return "", e1
+		return "", "", e1
 	}
 
-	return "active", nil
+	return "active", owner, nil
 }
