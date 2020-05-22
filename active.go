@@ -66,7 +66,7 @@ func main() {
 	}
 
 	client := config.GithubClient(c, tokenF) // Github communication.
-	env := config.RuntimeEnv(client)         // Runtime environment.
+	env := config.RuntimeEnv(c, client)      // Runtime environment.
 	projects := allProjects(c)
 
 	// Report discovered files.
@@ -135,7 +135,7 @@ func main() {
 // project has no workflow files.
 func allProjects(c *config.Config) []*Project {
 	if *localF {
-		return []*Project{project(".")}
+		return []*Project{project(c, ".")}
 	}
 
 	if len(c.Projects) == 0 {
@@ -144,7 +144,7 @@ func allProjects(c *config.Config) []*Project {
 
 	ps := make([]*Project, 0)
 	for _, p := range c.Projects {
-		ps = append(ps, project(p))
+		ps = append(ps, project(c, p))
 	}
 	return ps
 }
@@ -154,12 +154,13 @@ func allProjects(c *config.Config) []*Project {
 //
 // Exits the program if even one file fails to be read, or if there weren't any
 // to be read for the given project.
-func project(path string) *Project {
+func project(c *config.Config, path string) *Project {
 	name := filepath.Base(path)
 
 	var repo *git.Repository
 	owner := ""
 	remote := ""
+	branch := ""
 	if *pushF {
 		r, e0 := git.PlainOpen(path)
 		utils.ExitIfErr(e0)
@@ -169,6 +170,10 @@ func project(path string) *Project {
 		utils.ExitIfErr(e1)
 		remote = rem
 		owner = own
+
+		br, e2 := switchBranches(c, r, remote, name)
+		utils.ExitIfErr(e2)
+		branch = br
 	}
 
 	// Read and parse all Workflow files.
@@ -192,6 +197,7 @@ func project(path string) *Project {
 		workflows: ws,
 		repo:      repo,
 		accepted:  make([]string, 0),
+		branch:    branch,
 	}
 }
 
@@ -218,7 +224,6 @@ func applyUpdates(env *config.Env, project *Project) {
 	// ASSUMPTION: `env.L.Vers` has been fully written to, and will only be read
 	// from here on.
 	ls := env.L.Vers
-	switched := false
 
 	// Apply updates, if the user wants them.
 	for _, wf := range project.workflows {
@@ -228,21 +233,10 @@ func applyUpdates(env *config.Env, project *Project) {
 		// Only proceed if there were actually changes to consider.
 		if wf.yaml != yamlNew {
 			env.T.Mut.Lock()
+			defer env.T.Mut.Unlock()
 			resp := prompt(env, project.name, wf, newAs)
 
 			if resp {
-				if *pushF && !switched {
-					branch, e0 := switchBranches(project.repo)
-					if e0 != nil {
-						fmt.Println(e0)
-						fmt.Printf("Skipping %s...\n", cyan(project.name))
-						env.T.Mut.Unlock()
-						return
-					}
-					switched = true
-					project.branch = branch
-				}
-
 				ioutil.WriteFile(wf.path, []byte(yamlNew), 0644)
 				fmt.Println("Updated.")
 
@@ -253,15 +247,15 @@ func applyUpdates(env *config.Env, project *Project) {
 			} else {
 				fmt.Println("Skipping...")
 			}
-			env.T.Mut.Unlock()
 		}
 	}
 }
 
 // Switch git branches, if we haven't already. go-git does not
 // support stashing, so if the working tree isn't clean, we have
-// to skip this Project entirely.
-func switchBranches(r *git.Repository) (string, error) {
+// to skip this Project entirely. This also pulls the latest master from
+// the remote.
+func switchBranches(c *config.Config, r *git.Repository, remote string, pname string) (string, error) {
 	wt, e9 := r.Worktree()
 	if e9 != nil {
 		return "", e9
@@ -273,16 +267,20 @@ func switchBranches(r *git.Repository) (string, error) {
 	}
 
 	if !status.IsClean() {
-		return "", fmt.Errorf("The working tree is not clean.")
+		return "", fmt.Errorf("The working tree of %s is not clean.", cyan(pname))
 	}
 	e0 := gitutils.Checkout(r, "master")
 	if e0 != nil {
-		return "", fmt.Errorf("Unable to switch branches: %s", e0)
+		return "", fmt.Errorf("Unable to switch branches for %s: %s", cyan(pname), e0)
+	}
+	e2 := gitutils.PullMaster(wt, remote, c.Git.User, c.Git.Token)
+	if e2 != nil {
+		return "", fmt.Errorf("Could not pull master for %s: %s", cyan(pname), e2)
 	}
 	branch := "active/" + time.Now().Format("2006-01-02-15-04-05")
 	e1 := gitutils.CheckoutCreate(r, branch)
 	if e1 != nil {
-		return "", fmt.Errorf("Unable to create a new branch: %s", e1)
+		return "", fmt.Errorf("Unable to create a new branch for %s: %s", cyan(pname), e1)
 	}
 	return branch, nil
 }

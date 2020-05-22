@@ -56,10 +56,11 @@ type Terminal struct {
 // of function calls. Not every function that receives `Env` will need every
 // value, but in practice this isn't a problem.
 type Env struct {
-	C *github.Client
-	W *Witness
-	L *Lookups
-	T *Terminal
+	C    *github.Client
+	W    *Witness
+	L    *Lookups
+	T    *Terminal
+	Conf *Config
 }
 
 // Doesn't mind if the expected fields are missing from the config file.
@@ -91,10 +92,10 @@ func GithubClient(config *Config, token *string) *github.Client {
 }
 
 // Everything necessary for coordinated concurrency and Github lookups.
-func RuntimeEnv(client *github.Client) *Env {
+func RuntimeEnv(conf *Config, client *github.Client) *Env {
 	witness := Witness{Seen: make(map[string]bool)}
 	lookups := Lookups{Vers: make(map[string]string)}
 	terminal := Terminal{Scan: bufio.NewScanner(os.Stdin)}
-	env := Env{client, &witness, &lookups, &terminal}
+	env := Env{client, &witness, &lookups, &terminal, conf}
 	return &env
 }

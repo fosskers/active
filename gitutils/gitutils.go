@@ -104,6 +104,16 @@ func Push(r *git.Repository, remote string, branch string, user string, token st
 	})
 }
 
+// Pull the `master` branch.
+func PullMaster(w *git.Worktree, remote string, user string, token string) error {
+	return w.Pull(&git.PullOptions{
+		RemoteName:    remote,
+		ReferenceName: plumbing.Master,
+		SingleBranch:  true,
+		Auth:          &http.BasicAuth{Username: user, Password: token},
+	})
+}
+
 // Open a pull request, and return its number.
 func PullRequest(c *github.Client, owner string, repo string, branch string) (int, error) {
 	new := &github.NewPullRequest{
