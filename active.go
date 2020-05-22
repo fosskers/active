@@ -142,10 +142,20 @@ func allProjects(c *config.Config) []*Project {
 		utils.PrintExit("No projects to check. Try '--local' or setting your config file.")
 	}
 
+	var wg sync.WaitGroup
+	var mut sync.Mutex
 	ps := make([]*Project, 0)
-	for _, p := range c.Projects {
-		ps = append(ps, project(c, p))
+	for _, proj := range c.Projects {
+		wg.Add(1)
+		go func(p string) {
+			proj := project(c, p)
+			mut.Lock()
+			ps = append(ps, proj)
+			mut.Unlock()
+			wg.Done()
+		}(proj)
 	}
+	wg.Wait()
 	return ps
 }
 
