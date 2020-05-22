@@ -10,3 +10,4 @@ This is the initial release of `active`.
 - Config file support. Expected at `$HOME/.config/active.yaml`, but can be
   overridden with `--config`.
 - OAuth support for querying the Github API without a rate limit.
+- Automatic PR opening with the `--push` flag.
