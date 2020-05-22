@@ -135,7 +135,9 @@ func main() {
 // project has no workflow files.
 func allProjects(c *config.Config) []*Project {
 	if *localF {
-		return []*Project{project(c, ".")}
+		p, e0 := project(c, ".")
+		utils.ExitIfErr(e0) // Fail hard if the only project we're checking is invalid.
+		return []*Project{p}
 	}
 
 	if len(c.Projects) == 0 {
@@ -148,11 +150,15 @@ func allProjects(c *config.Config) []*Project {
 	for _, proj := range c.Projects {
 		wg.Add(1)
 		go func(p string) {
-			proj := project(c, p)
+			defer wg.Done()
+			proj, e0 := project(c, p)
+			if e0 != nil {
+				fmt.Println(e0)
+				return
+			}
 			mut.Lock()
 			ps = append(ps, proj)
 			mut.Unlock()
-			wg.Done()
 		}(proj)
 	}
 	wg.Wait()
@@ -164,7 +170,7 @@ func allProjects(c *config.Config) []*Project {
 //
 // Exits the program if even one file fails to be read, or if there weren't any
 // to be read for the given project.
-func project(c *config.Config, path string) *Project {
+func project(c *config.Config, path string) (*Project, error) {
 	name := filepath.Base(path)
 
 	var repo *git.Repository
@@ -173,16 +179,22 @@ func project(c *config.Config, path string) *Project {
 	branch := ""
 	if *pushF {
 		r, e0 := git.PlainOpen(path)
-		utils.ExitIfErr(e0)
+		if e0 != nil {
+			return nil, e0
+		}
 		repo = r
 
 		rem, own, e1 := gitutils.PushableRemote(r)
-		utils.ExitIfErr(e1)
+		if e1 != nil {
+			return nil, e1
+		}
 		remote = rem
 		owner = own
 
 		br, e2 := switchBranches(c, r, remote, name)
-		utils.ExitIfErr(e2)
+		if e2 != nil {
+			return nil, e2
+		}
 		branch = br
 	}
 
@@ -208,7 +220,7 @@ func project(c *config.Config, path string) *Project {
 		repo:      repo,
 		accepted:  make([]string, 0),
 		branch:    branch,
-	}
+	}, nil
 }
 
 // Given a local path to a code repository, find the paths of all its Github
@@ -284,7 +296,7 @@ func switchBranches(c *config.Config, r *git.Repository, remote string, pname st
 		return "", fmt.Errorf("Unable to switch branches for %s: %s", cyan(pname), e0)
 	}
 	e2 := gitutils.PullMaster(wt, remote, c.Git.User, c.Git.Token)
-	if e2 != nil {
+	if e2 != nil && e2 != git.NoErrAlreadyUpToDate {
 		return "", fmt.Errorf("Could not pull master for %s: %s", cyan(pname), e2)
 	}
 	branch := "active/" + time.Now().Format("2006-01-02-15-04-05")
