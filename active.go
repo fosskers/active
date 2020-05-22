@@ -28,8 +28,7 @@ var tokenF *string = flag.String("token", "", "(optional) Github API OAuth Token
 var autoF *bool = flag.Bool("y", false, "Automatically apply changes.")
 var configPathF *string = flag.String("config", confPath, "Path to config file.")
 var pushF *bool = flag.Bool("push", false, "Automatically make commits and open a PR on Github.")
-
-// TODO Flag for turning off colours.
+var nocolourF *bool = flag.Bool("nocolor", false, "Disable coloured output.")
 
 // Coloured output.
 var cyan = color.New(color.FgCyan).SprintFunc()
@@ -56,6 +55,10 @@ type Workflow struct {
 func main() {
 	flag.Parse()                         // Collect command-line options.
 	c := config.ReadConfig(*configPathF) // Read the config file.
+
+	if *nocolourF {
+		color.NoColor = true
+	}
 
 	if *pushF && *tokenF == "" && c.Git.Token == "" {
 		utils.PrintExit("A real token must be given when using '--push'.")

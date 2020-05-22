@@ -142,7 +142,7 @@ First step: perform this on a local repo!
   - [x] List of projects to check
   - [x] Oauth token
   - [x] CLI flag for changing config location
-- [ ] Github interaction
+- [x] Github interaction
   - [x] Release ver lookup
   - [x] `--push` flag to make a commit and push a branch.
   - [x] Push up a branch?
@@ -154,15 +154,12 @@ First step: perform this on a local repo!
 - [x] Authenticated / non-authenicated modes (being auth'd increases GH rate limit)
 - [x] Good use of concurrency
 - [x] Set up CI
-- [ ] Localisation
-  - [ ] `-j` flag
-  - [ ] Config field for Japanese output
-  - [ ] README 和訳
 - [ ] README
   - [x] CI badge
   - [x] Usage examples and sample output
   - [ ] Setting up OAuth
   - [x] Table of Contents
+  - [ ] 和訳
 - [x] Changelog
 - [ ] Official release
   - [ ] Github release
