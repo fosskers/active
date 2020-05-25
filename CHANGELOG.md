@@ -1,5 +1,13 @@
 # `active` Changelog
 
+## 1.0.1 (2020-05-25)
+
+#### Changed
+
+- When using `--pull`, the `master` branch is now pulled from the detected
+  remote before analysis occurs.
+- Performance improvements.
+
 ## 1.0.0 (2020-05-20)
 
 This is the initial release of `active`.
