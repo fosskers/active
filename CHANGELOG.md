@@ -1,5 +1,11 @@
 # `active` Changelog
 
+## 1.0.2 (2020-05-28)
+
+#### Fixed
+
+- Fixed a deadlock and a segfault.
+
 ## 1.0.1 (2020-05-25)
 
 #### Changed
