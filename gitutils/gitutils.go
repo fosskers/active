@@ -124,8 +124,10 @@ func PullRequest(c *github.Client, owner string, repo string, branch string) (in
 		MaintainerCanModify: github.Bool(true),
 	}
 	pr, _, e0 := c.PullRequests.Create(context.Background(), owner, repo, new)
-
-	return *pr.Number, e0
+	if e0 != nil {
+		return 0, e0
+	}
+	return *pr.Number, nil
 }
 
 // Pick a suitable "remote" to push to later, defaulting to one that was created
