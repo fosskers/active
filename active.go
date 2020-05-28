@@ -255,7 +255,6 @@ func applyUpdates(env *config.Env, project *Project) {
 		// Only proceed if there were actually changes to consider.
 		if wf.yaml != yamlNew {
 			env.T.Mut.Lock()
-			defer env.T.Mut.Unlock()
 			resp := prompt(env, project.name, wf, newAs)
 
 			if resp {
@@ -269,6 +268,7 @@ func applyUpdates(env *config.Env, project *Project) {
 			} else {
 				fmt.Println("Skipping...")
 			}
+			env.T.Mut.Unlock()
 		}
 	}
 }
