@@ -5,6 +5,8 @@
 
 *Keep your Github Action versions up-to-date. 使用の Github Actions を最新に！*
 
+**Actually, Github's Dependabot can now handle this automatically.** [See these docs](https://docs.github.com/en/github/administering-a-repository/keeping-your-actions-up-to-date-with-github-dependabot).
+
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
